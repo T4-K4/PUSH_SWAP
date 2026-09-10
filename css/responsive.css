@@ -1,0 +1,151 @@
+/* ==========================================================================
+   42 PUSH_SWAP TRAINER - RESPONSIVE STYLES
+   ========================================================================== */
+
+/* --- Büyük / Orta Ekran Tabletler (1100px ve altı) --- */
+@media screen and (max-width: 1100px) {
+    .bottom-grid {
+        grid-template-columns: 240px 1fr;
+        height: auto;
+    }
+
+    .terminal-panel {
+        grid-column: span 2;
+        height: 280px;
+    }
+
+    .summary-matrix {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* --- Dikey Tablet & Geniş Ekran Telefonlar (768px ve altı) --- */
+@media screen and (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    /* Üst Başlık (Header) Düzenlemesi */
+    header {
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px 16px;
+    }
+
+    .header-left {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .badge-box {
+        align-items: center;
+    }
+
+    .badge-value {
+        font-size: 13px;
+    }
+
+    /* Oyun Alanı ve Yığınlar */
+    .stage-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .practice-config,
+    .cerat-config {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .stacks-container {
+        padding: 10px;
+        min-height: 200px;
+    }
+
+    /* Alt Izgara Tek Kolona Döner */
+    .bottom-grid {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .commands-panel {
+        max-height: 220px;
+    }
+
+    .builder-panel {
+        height: 360px;
+    }
+
+    .terminal-panel {
+        grid-column: span 1;
+        height: 260px;
+    }
+
+    /* Mod Seçim Kartları Dikey Sıralanır */
+    .mode-cards {
+        flex-direction: column;
+        gap: 12px;
+        width: 90%;
+        max-width: 320px;
+    }
+
+    .mode-card {
+        width: 100%;
+        padding: 16px;
+    }
+
+    .mode-icon {
+        font-size: 32px;
+        margin-bottom: 6px;
+    }
+}
+
+/* --- Küçük Ekran Telefonlar (480px ve altı) --- */
+@media screen and (max-width: 480px) {
+    .nav-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    .logo {
+        font-size: 16px;
+    }
+
+    .control-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .actions-group {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .actions-group .btn {
+        flex: 1 1 calc(50% - 4px);
+        justify-content: center;
+    }
+
+    .summary-matrix {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .modal-card {
+        padding: 16px;
+        max-height: 85vh;
+    }
+
+    .login-card {
+        width: 90%;
+        padding: 24px 18px;
+    }
+}

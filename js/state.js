@@ -1,0 +1,18 @@
+const AppState = {
+    gameMode: 'compete',
+    currentLevel: 1,
+    maxLevel: 13,
+    score: 0,
+    playerName: "student42",
+    initialStack: [],
+    stackA: [],
+    stackB: [],
+    userPipeline: [],
+    optimalSolutionLength: 2,
+    isSimulating: false,
+    totalSeconds: 25 * 60,
+    timerInterval: null,
+    isPaused: false,
+    activeTab: 'c',
+    isFirstGuideSeen: false
+};

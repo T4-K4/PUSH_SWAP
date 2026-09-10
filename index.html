@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>42 Push_swap Master Trainer</title>
+
+    <!-- CSS Dosyaları (Sıralama Önemlidir) -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+    <!-- 1. KILAVUZ MODALI -->
+    <div id="guide-modal" class="modal-overlay" style="display: flex;">
+        <div class="modal-card">
+            <button class="modal-close" onclick="closeInitialGuide()">✕</button>
+            <div class="modal-title">Push_swap Eğitim Kılavuzu</div>
+            <div class="modal-content">
+                <p>Bu uygulama, 42 müfredatındaki <b>push_swap</b> projesini kodlamadan önce algoritma mantığını ve yığın dinamiğini kavramanız için tasarlanmıştır.</p>
+
+                <h4>🎯 Hedef</h4>
+                <p>A yığınındaki daireleri (sayıları) <b>küçükten büyüğe</b> sıralamak ve B yığınını tamamen boş bırakmaktır. Daire boyutu sayının büyüklüğünü temsil eder.</p>
+
+                <h4>📋 Puanlama & Geçiş Kuralları</h4>
+                <ul>
+                    <li><b>100 Puan:</b> Sayıları sıralar ve sistemin belirlediği en kısa hamle sayısıyla <b>birebir aynı</b> adımda bitirirsen seviyeyi geçersin.</li>
+                    <li><b>200 Puan:</b> Sayıları sıralar ve sistemin bulduğu çözümü geçerek <b>daha az hamleyle</b> bitirirsen seviyeyi geçersin.</li>
+                    <li><b>50 Puan (Kabul Edilmez):</b> Sayıları sıralarsın ancak sistemin ideal adımından <b>daha uzun</b> bir yol izlersen seviyeyi geçemezsin (Tekrar denemen gerekir).</li>
+                    <li><b>0 Puan:</b> Dizi sıralanmamışsa veya B yığını boş değilse işlem başarısız sayılır.</li>
+                </ul>
+
+                <h4>🕹️ Nasıl Oynanır?</h4>
+                <p>Soldaki komut kartlarını sağdaki işlem sırasına sürükleyip bırakın veya doğrudan karta tıklayın. Listenizi tamamlayınca <b>Simüle Et & Doğrula</b> butonuna basın.</p>
+
+                <h4>💻 C Kodu ve Binary Terminali</h4>
+                <p>Sağ paneldeki <b>C Kodu</b> sekmesinde operasyonların arkasındaki gerçek C fonksiyon gövdelerini ve pointer manipülasyonlarını görebilirsiniz. <b>Binary (Radix)</b> sekmesinde ise $O(n \log n)$ Radix sıralamasının bit bazlı mantığını inceleyebilirsiniz.</p>
+
+                <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                    <button class="btn btn-run" onclick="closeInitialGuide()" style="padding: 10px 20px; font-size: 13px;">Okudum, Giriş Yap →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. LOGIN EKRANI -->
+    <div id="login-modal" class="overlay-screen">
+        <div class="login-card">
+            <div style="font-size: 36px; margin-bottom: 8px;">👤</div>
+            <h2 style="color: var(--accent-blue); margin: 0 0 6px 0; font-size: 22px;">Oyuncu Girişi</h2>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0;">Push_swap serüvenine başlamak için intra kullanıcı adınızı belirleyin.</p>
+            <input type="text" id="login-input-field" class="login-input" placeholder="Kullanıcı Adı (Örn: cadet42)" maxlength="16" onkeydown="if(event.key==='Enter') submitLogin()">
+            <button class="btn btn-run" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px;" onclick="submitLogin()">Devam Et →</button>
+        </div>
+    </div>
+
+    <!-- 3. MOD SEÇİM EKRANI -->
+    <div id="mode-modal" class="overlay-screen">
+        <h1 style="color: var(--accent-blue); font-size: 32px; font-weight: 900; margin: 0;">42 PUSH_SWAP TRAINER</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px;">Başlamak için bir oyun modu seçin</p>
+        <div class="mode-cards">
+            <div class="mode-card" onclick="selectMode('compete')">
+                <div class="mode-icon">🏆</div>
+                <div class="mode-title">Yarışma Modu</div>
+                <div class="mode-desc">Aşamalı 13 seviye (3-15 sayı) ve global skor tablosu.</div>
+            </div>
+            <div class="mode-card" onclick="selectMode('practice')">
+                <div class="mode-icon">🧘‍♂️</div>
+                <div class="mode-title">Serbest Antrenman</div>
+                <div class="mode-desc">İstediğin sayı adedini seç, rahatça algoritma ve yığın mantığı çalış.</div>
+            </div>
+            <div class="mode-card" onclick="selectMode('cerat')">
+                <div class="mode-icon">🛠️</div>
+                <div class="mode-title">Cerat Oluşturma</div>
+                <div class="mode-desc">Kendi sayılarını gir veya 500, 1000, 1500, 2000 sayı ile test et.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Üst Başlık -->
+    <header>
+        <div class="header-left">
+            <div class="logo" onclick="handleHomeNavigation()">42 PUSH_SWAP</div>
+            <button id="home-btn" class="nav-btn" onclick="handleHomeNavigation()">
+                🏠 Menü
+            </button>
+            <button class="nav-btn" onclick="UI.toggleModal('guide-modal', true)">
+                📖 Kılavuz
+            </button>
+            <button class="nav-btn" onclick="openLeaderboardModal()">
+                🏆 Skorlar
+            </button>
+        </div>
+        <div class="header-right">
+            <div class="badge-box" onclick="promptChangeName()">
+                <span class="badge-title">Oyuncu (Değiştir)</span>
+                <span id="player-name" class="badge-value">student42</span>
+            </div>
+            <div class="badge-box" id="timer-box">
+                <span class="badge-title">Kalan Süre</span>
+                <span id="timer-indicator" class="badge-value badge-timer">25:00</span>
+            </div>
+            <div class="badge-box">
+                <span class="badge-title">Seviye</span>
+                <span id="level-indicator" class="badge-value">1 / 13</span>
+            </div>
+            <div class="badge-box">
+                <span class="badge-title">Puan</span>
+                <span id="score-indicator" class="badge-value badge-score">0</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="stage">
+            <div class="stage-header">
+                <span id="stage-mode-label">Görsel Yığın Durumu</span>
+
+                <div id="practice-controller" class="practice-config" style="display: none;">
+                    <span>Sayı Adedi:</span>
+                    <select id="practice-count-select" onchange="changePracticeCount(this.value)" style="background:#1a1c29; color:#fff; border:1px solid #3b4261; border-radius:4px; padding:2px 6px;">
+                        <option value="3">3 Sayı</option>
+                        <option value="4">4 Sayı</option>
+                        <option value="5" selected>5 Sayı</option>
+                        <option value="6">6 Sayı</option>
+                        <option value="8">8 Sayı</option>
+                        <option value="10">10 Sayı</option>
+                        <option value="15">15 Sayı</option>
+                    </select>
+                </div>
+
+                <div id="cerat-controller" class="cerat-config" style="display: none;">
+                    <button class="cerat-btn" onclick="promptCustomInput()">✏️ Sayı Gir</button>
+                    <span>Rastgele:</span>
+                    <button class="cerat-btn" onclick="loadCeratRandom(500)">500</button>
+                    <button class="cerat-btn" onclick="loadCeratRandom(1000)">1000</button>
+                    <button class="cerat-btn" onclick="loadCeratRandom(1500)">1500</button>
+                    <button class="cerat-btn" onclick="loadCeratRandom(2000)">2000</button>
+                </div>
+
+                <span id="live-step-tracker" style="color: var(--accent-blue);">Canlı Adım: Bekleniyor</span>
+            </div>
+
+            <div class="stacks-container">
+                <div class="stack-column">
+                    <div class="stack-label">STACK A</div>
+                    <div id="stack-a-balls" class="stack-balls"></div>
+                    <div id="stack-a-text" class="large-stack-view" style="display: none;"></div>
+                </div>
+                <div class="stack-column">
+                    <div class="stack-label">STACK B</div>
+                    <div id="stack-b-balls" class="stack-balls"></div>
+                    <div id="stack-b-text" class="large-stack-view" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-grid">
+            <div class="commands-panel" id="cmd-source-list"></div>
+
+            <div class="builder-panel">
+                <div class="panel-header-sub">
+                    <span>İŞLEM SIRASI & ÖZETİ</span>
+                    <span style="font-size: 11px;">Kullanım İstatistikleri</span>
+                </div>
+                <div class="pipeline-zone" id="pipeline" ondragover="allowDrop(event)" ondrop="handleDrop(event)"></div>
+
+                <div class="control-bar">
+                    <div class="benchmark-info">
+                        Hamle: <span id="user-moves-count">0</span> |
+                        Hedef (42 Baremi): <span id="best-moves-count">0</span>
+                    </div>
+                    <div class="actions-group">
+                        <button class="btn btn-clear" onclick="resetCurrentPipeline()">Temizle</button>
+                        <button id="solve-cerat-btn" class="btn btn-pause" onclick="autoSolveCerat()" style="display: none; background:#2a3a5e; color:#00d2ff;">Oto-Çöz (Optimize)</button>
+                        <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;">Durdur</button>
+                        <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;">Yeniden Başlat</button>
+                        <button class="btn btn-run" onclick="executeUserPipeline()">Simüle Et & Doğrula</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="terminal-panel">
+                <div class="terminal-tabs">
+                    <button id="tab-c-btn" class="term-tab-btn active" onclick="switchTerminalTab('c')">C Kaynak Kodu</button>
+                    <button id="tab-bin-btn" class="term-tab-btn" onclick="switchTerminalTab('binary')">Binary (Radix)</button>
+                </div>
+                <div class="terminal-body" id="terminal-view"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skor Modalı -->
+    <div id="leaderboard-modal" class="modal-overlay">
+        <div class="modal-card">
+            <button class="modal-close" onclick="UI.toggleModal('leaderboard-modal', false)">✕</button>
+            <div class="modal-title">🏆 En Yüksek Skorlar</div>
+            <div class="modal-content">
+                <table class="score-table">
+                    <thead>
+                        <tr>
+                            <th>Sıra</th>
+                            <th>Öğrenci</th>
+                            <th>Skor</th>
+                            <th>Tarih</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Yükleme Sıralaması (Bağımlılık Zinciri) -->
+    <script src="js/config.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/engine.js"></script>
+    <script src="js/solver.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
