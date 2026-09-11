@@ -75,6 +75,11 @@
                 <div class="mode-title">Cerat Oluşturma</div>
                 <div class="mode-desc">Kendi sayılarını gir veya 500, 1000, 1500, 2000 sayı ile test et.</div>
             </div>
+            <div class="mode-card" onclick="selectMode('evaluator')">
+                <div class="mode-icon">🧪</div>
+                <div class="mode-title">Evo & Checker Modu</div>
+                <div class="mode-desc">Kendi kodunu/çıktını test et; Linux, Mac ve Win checker testleri ile edge-case senaryolarında sınırları zorla.</div>
+            </div>
         </div>
     </div>
 
@@ -129,6 +134,14 @@
                         <option value="15">15 Sayı</option>
                     </select>
                 </div>
+                <div id="eval-controller" class="cerat-config" style="display: none; gap: 8px;">
+                <span>Checker OS:</span>
+                        <button class="cerat-btn" id="btn-os-linux" onclick="setCheckerOS('linux')">🐧 Linux</button>
+                        <button class="cerat-btn" id="btn-os-mac" onclick="setCheckerOS('mac')">🍎 macOS</button>
+                        <button class="cerat-btn" id="btn-os-win" onclick="setCheckerOS('win')">🪟 Windows</button>
+                        <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()">💥 Kodu Patlatmayı Dene</button>
+                        <button class="cerat-btn" style="background:#0284c7; color:#fff;" onclick="loadCustomInputToEval()">📥 Özel Input Test Et</button>
+                </div>
 
                 <div id="cerat-controller" class="cerat-config" style="display: none;">
                     <button class="cerat-btn" onclick="promptCustomInput()">✏️ Sayı Gir</button>
@@ -177,6 +190,7 @@
                         <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;">Durdur</button>
                         <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;">Yeniden Başlat</button>
                         <button class="btn btn-run" onclick="executeUserPipeline()">Simüle Et & Doğrula</button>
+                        <button id="eval-paste-btn" class="btn btn-pause" onclick="evalRunPastedCommands()" style="display: none; background:#3b4261; color:#00d2ff;">Komutları İşlet & Kontrol Et</button>
                     </div>
                 </div>
             </div>
@@ -212,6 +226,7 @@
         </div>
     </div>
 
+    <canvas id="confetti-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:99999; display:none;"></canvas>
     <!-- JS Yükleme Sıralaması (Bağımlılık Zinciri) -->
     <script src="js/config.js"></script>
     <script src="js/state.js"></script>
