@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 let currentRepoDir = null;
 
+// CORS Başlıkları
 const setCorsHeaders = (res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -19,7 +20,6 @@ const sendJson = (res, statusCode, data) => {
     res.end(JSON.stringify(data));
 };
 
-// Klasördeki tüm dosyaları ve alt klasörleri özyinelemeli toplar
 function scanDirectory(dir) {
     let files = [];
     let dirs = [dir];
@@ -41,7 +41,6 @@ function scanDirectory(dir) {
     return { files, dirs };
 }
 
-// Dosyada main fonksiyonu var mı kontrolü
 function hasMain(filePath) {
     try {
         const text = fs.readFileSync(filePath, 'utf8');
@@ -61,67 +60,72 @@ const server = http.createServer((req, res) => {
     }
 
     let body = '';
-    req.on('data', chunk => { body += chunk; });
+    req.on('data', chunk => {
+        body += chunk;
+        // Body boyutu 2MB'ı aşarsa bağlantıyı kes (Payload DoS koruması)
+        if (body.length > 2 * 1024 * 1024) {
+            req.destroy();
+        }
+    });
+
     req.on('end', () => {
         let parsed = {};
         if (body) {
             try { parsed = JSON.parse(body); } catch (e) {}
         }
 
-        // 1. EVRENSEL DERLEME ENDPOINT'I
+        // 1. DERLEME ENDPOINT'I
         if (req.url === '/api/compile' && req.method === 'POST') {
             let { repoUrl } = parsed;
             if (!repoUrl) return sendJson(res, 400, { success: false, error: 'Repo linki boş!' });
 
-            if (!repoUrl.startsWith('http://') && !repoUrl.startsWith('https://')) {
-                repoUrl = 'https://' + repoUrl;
+            // Sadece meşru git/github bağlantılarına izin ver (SSRF ve URL Injection koruması)
+            const cleanUrl = repoUrl.trim();
+            if (!/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(?:\.git)?$/.test(cleanUrl)) {
+                return sendJson(res, 400, { success: false, error: 'Geçersiz format! Sadece geçerli GitHub repository bağlantıları kabul edilir.' });
             }
 
-            const tempDir = path.join(os.tmpdir(), `ps_${Date.now()}`);
+            const tempDir = path.join(os.tmpdir(), `ps_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
             fs.mkdirSync(tempDir, { recursive: true });
 
-            console.log(`[+] Repo indiriliyor: ${repoUrl}`);
+            console.log(`[+] İzole klon başlatılıyor: ${cleanUrl}`);
 
-            // Submodule'ler dahil tüm repoyu çek
-            const cloneCmd = `git config --global url."https://github.com/".insteadOf "git@github.com:" && git clone --depth 1 --recurse-submodules --shallow-submodules ${repoUrl} .`;
+            // Klonlama komutu
+            const cloneCmd = `git clone --depth 1 --recurse-submodules --shallow-submodules "${cleanUrl}" .`;
 
-            exec(cloneCmd, { cwd: tempDir, timeout: 60000 }, (cloneErr) => {
+            exec(cloneCmd, { cwd: tempDir, timeout: 35000 }, (cloneErr) => {
                 if (cloneErr) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: `Git indirme hatası: ${cloneErr.message}` });
+                    return sendJson(res, 400, { success: false, error: `Git Klonlama Başarısız (Gizli repo veya hatalı link): ${cloneErr.message}` });
                 }
 
-                // Linux Case-Sensitivity Evrensel Çözümü:
-                // Repodaki her klasörün hem küçük harfli hem büyük harfli alias'ını oluştur (örn: Libft <-> libft)
+                // Dizin alias'ları
                 try {
                     const entries = fs.readdirSync(tempDir, { withFileTypes: true });
                     entries.filter(e => e.isDirectory()).forEach(d => {
-                        const originalName = d.name;
-                        const lower = originalName.toLowerCase();
-                        const upper = originalName.charAt(0).toUpperCase() + originalName.slice(1);
-                        
-                        if (originalName !== lower && !fs.existsSync(path.join(tempDir, lower))) {
-                            fs.symlinkSync(originalName, path.join(tempDir, lower), 'dir');
+                        const orig = d.name;
+                        const lower = orig.toLowerCase();
+                        const upper = orig.charAt(0).toUpperCase() + orig.slice(1);
+
+                        if (orig !== lower && !fs.existsSync(path.join(tempDir, lower))) {
+                            fs.symlinkSync(orig, path.join(tempDir, lower), 'dir');
                         }
-                        if (originalName !== upper && !fs.existsSync(path.join(tempDir, upper))) {
-                            fs.symlinkSync(originalName, path.join(tempDir, upper), 'dir');
+                        if (orig !== upper && !fs.existsSync(path.join(tempDir, upper))) {
+                            fs.symlinkSync(orig, path.join(tempDir, upper), 'dir');
                         }
                     });
                 } catch (e) {}
 
-                // Tüm dosyaları ve klasörleri tara
                 const { files, dirs } = scanDirectory(tempDir);
                 const cFiles = files.filter(f => f.endsWith('.c'));
 
                 if (cFiles.length === 0) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: 'Bu projede hiç .c dosyası bulunamadı!' });
+                    return sendJson(res, 400, { success: false, error: 'Bu repoda hiç .c dosyası bulunamadı!' });
                 }
 
-                // Bütün alt klasörleri GCC arama yoluna (-I) ekle
                 const includeFlags = dirs.map(d => `-I"${d}"`).join(' ');
 
-                // Main fonksiyonlarını ayıkla (Checker main'leri ana binary'ye çakışmasın)
                 const mains = [];
                 const nonMains = [];
 
@@ -135,50 +139,50 @@ const server = http.createServer((req, res) => {
 
                 if (mains.length === 0) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: "Geçersiz Kod: Projede çalıştırılabilir 'main' fonksiyonu bulunamadı!" });
+                    return sendJson(res, 400, { success: false, error: "Geçersiz Kod: Projede 'main' fonksiyonu bulunamadı!" });
                 }
 
-                // Asıl push_swap main'ini seç
                 let chosenMain = mains.find(f => {
                     const b = path.basename(f).toLowerCase();
                     return !b.includes('checker') && !b.includes('bonus');
                 }) || mains[0];
 
-                // Kullanılmayan/Dışarıda kalan diğer main dosyaları
                 const unusedMains = mains.filter(f => f !== chosenMain).map(f => path.relative(tempDir, f));
-
-                // Derlenecek dosya havuzu: Seçilen main + ne kadar .c varsa hepsi
                 const compileTargets = [chosenMain, ...nonMains];
 
-                // GCC Evrensel Komutu: Uyarıları yok say (-w), ne varsa bağla ve push_swap binary'sini üret
+                // GCC Derleme: -w ile uyarıları yut, binary'yi üret
                 const gccCmd = `gcc -w ${includeFlags} ${compileTargets.map(f => `"${f}"`).join(' ')} -o push_swap`;
 
-                console.log(`[+] GCC ile evrensel derleme koşturuluyor...`);
+                console.log(`[+] GCC ile derleniyor...`);
 
-                exec(gccCmd, { cwd: tempDir, timeout: 60000 }, (gccErr, stdout, stderr) => {
+                exec(gccCmd, { cwd: tempDir, timeout: 45000 }, (gccErr, stdout, stderr) => {
                     const binaryPath = path.join(tempDir, 'push_swap');
 
                     if (!fs.existsSync(binaryPath)) {
                         fs.rmSync(tempDir, { recursive: true, force: true });
                         return sendJson(res, 400, {
                             success: false,
-                            error: `Derleme Başarısız (Syntax / Kod Hatası):\n${stderr || stdout || "Binary dosya üretilemedi!"}`
+                            error: `Derleme Başarısız (Syntax / Kod Hatası):\n${stderr || stdout || "push_swap üretilemedi!"}`
                         });
                     }
 
-                    // SENİN İSTEDİĞİN DOĞRULAMA: Çıktıyı test et, push_swap komutu basmıyorsa "Geçersiz Kod" de
-                    exec(`./push_swap 2 1 3`, { cwd: tempDir, timeout: 5000 }, (runErr, runStdout) => {
+                    // Sadece çalıştırma izni ver, yazma izinlerini kısıtla
+                    try { fs.chmodSync(binaryPath, 0o755); } catch (e) {}
+
+                    // SANDBOX DOĞRULAMA: ulimit ile fork-bomb ve bellek koruması
+                    const testCmd = `ulimit -u 30 -v 200000; ./push_swap 2 1 3`;
+
+                    exec(testCmd, { cwd: tempDir, timeout: 4000 }, (runErr, runStdout) => {
                         const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
                         const lines = (runStdout || '').split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
 
                         const isPushSwapCompatible = lines.length > 0 && lines.every(l => validOps.includes(l));
 
-                        // Eğer program push_swap komutu dışında anlamsız bir metin basıyorsa
                         if (!isPushSwapCompatible && lines.length > 0) {
                             fs.rmSync(tempDir, { recursive: true, force: true });
                             return sendJson(res, 400, {
                                 success: false,
-                                error: `Geçersiz Kod: Program derlendi fakat 42 push_swap komutları yerine alakasız çıktılar veriyor!\nAlınan çıktı: ${runStdout.slice(0, 80)}`
+                                error: `Geçersiz Program: Kod derlendi ancak 42 standart push_swap komutları yerine tanımsız çıktılar üretiyor!\nÇıktı: ${runStdout.slice(0, 80)}`
                             });
                         }
 
@@ -192,10 +196,10 @@ const server = http.createServer((req, res) => {
                             note = `\n\n[UYARI] Derlemeye dahil edilmeyen ikincil main/bonus dosyaları:\n-> ` + unusedMains.join('\n-> ');
                         }
 
-                        console.log(`[+] DERLEME BAŞARILI. push_swap hazır.`);
+                        console.log(`[+] Derleme & Sandbox onayı tamam.`);
                         return sendJson(res, 200, {
                             success: true,
-                            message: 'Kod başarıyla derlendi ve hazır!' + note
+                            message: 'Kod başarıyla derlendi ve sandbox testinden geçti!' + note
                         });
                     });
                 });
@@ -203,7 +207,7 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        // 2. ÇALIŞTIRMA ENDPOINT'I
+        // 2. ÇALIŞTIRMA ENDPOINT'I (ULIMIT & BUFFER KORUMALI)
         if (req.url === '/api/run' && req.method === 'POST') {
             const { args } = parsed;
 
@@ -211,19 +215,36 @@ const server = http.createServer((req, res) => {
                 return sendJson(res, 400, { success: false, error: 'Aktif push_swap binary bulunamadı!' });
             }
 
-            const argString = Array.isArray(args) ? args.join(' ') : (args || '');
-            const cmd = `./push_swap ${argString}`;
+            // Gelen argümanları temizle (Komut enjeksiyonunu engellemek için sadece tamsayı ve boşluk kabul et)
+            let safeArgs = "";
+            if (Array.isArray(args)) {
+                safeArgs = args.filter(x => /^-?\d+$/.test(String(x).trim())).join(' ');
+            } else if (typeof args === 'string') {
+                safeArgs = args.split(/\s+/).filter(x => /^-?\d+$/.test(x.trim())).join(' ');
+            }
 
-            exec(cmd, { cwd: currentRepoDir, timeout: 10000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+            // Güvenli çalıştırma: Maksimum 30 proses/thread, 300MB sanal bellek, maksimum 5 saniye
+            const cmd = `ulimit -u 30 -v 300000; ./push_swap ${safeArgs}`;
+
+            exec(cmd, { cwd: currentRepoDir, timeout: 6000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
                 if (err) {
                     if (err.killed) {
-                        return sendJson(res, 400, { success: false, error: 'TIMEOUT: Program 10 saniyede bitmedi (Sonsuz Döngü)!' });
+                        return sendJson(res, 400, { success: false, error: 'TIMEOUT (Zaman Aşımı): Algoritma 5 saniye içinde sonlanmadı (Olası sonsuz döngü)!' });
                     }
-                    return sendJson(res, 400, { success: false, error: `Çalışma Zamanı Hatası:\n${stderr || err.message}` });
+                    return sendJson(res, 400, { success: false, error: `Çalışma Zamanı Hatası (Segfault/Memory Limit):\n${stderr || err.message}` });
+                }
+
+                const lines = stdout.split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
+
+                // Bellek patlatma koruması (20.000 satırdan fazla çıktı basan kodları durdur)
+                if (lines.length > 20000) {
+                    return sendJson(res, 400, {
+                        success: false,
+                        error: `Barem Aşımı & Buffer Sınırı: Program ${lines.length} satır hamle bastı! 42 baremlerine göre bu kod elenmiştir.`
+                    });
                 }
 
                 const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
-                const lines = stdout.split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
                 const ops = [];
                 let invalidOp = null;
 
@@ -263,6 +284,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`====================================================`);
-    console.log(`  Evrensel Push_swap Servisi Başlatıldı! (Port: ${PORT})`);
+    console.log(`  Zırhlı Push_swap Servisi Aktif! (Port: ${PORT})`);
     console.log(`====================================================`);
 });

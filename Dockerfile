@@ -1,6 +1,5 @@
 FROM ubuntu:22.04
 
-# Temel C derleme araçlarını ve Node.js'i kur
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -12,10 +11,17 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Yetkisiz Linux kullanıcısı oluştur
+RUN useradd -m -u 1001 cadet
+
 WORKDIR /app
 
-# Sunucu dosyasını kopyala
+# Uygulamayı kopyala ve izinleri ayarla
 COPY server.js ./
+RUN chown -R cadet:cadet /app
+
+# Yetkisiz kullanıcıya geç
+USER cadet
 
 EXPOSE 3000
 
