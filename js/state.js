@@ -15,5 +15,6 @@ const AppState = {
     isPaused: false,
     activeTab: 'c',
     isFirstGuideSeen: false,
-    checkerOS: 'linux'
+    checkerOS: 'linux',
+    lastTestReport: []
 };

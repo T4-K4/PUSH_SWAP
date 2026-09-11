@@ -478,3 +478,37 @@
     outline: 1px solid var(--accent-blue) !important;
     background: rgba(0, 210, 255, 0.04);
 }
+/* --- Evo Checker Stilleri --- */
+.cerat-btn.active-os {
+    background: var(--accent-blue) !important;
+    color: #0b0f19 !important;
+    border-color: #ffffff !important;
+    font-weight: 800;
+}
+
+.test-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 6px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.test-report-table th, .test-report-table td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid #1e2436;
+}
+
+.test-report-table th {
+    color: var(--accent-blue);
+    background: #141724;
+}
+
+.status-passed { color: var(--accent-green); font-weight: bold; }
+.status-failed { color: var(--accent-red); font-weight: bold; }
+
+[contenteditable="true"]:focus {
+    outline: 1px solid var(--accent-blue) !important;
+    background: rgba(0, 210, 255, 0.03);
+}

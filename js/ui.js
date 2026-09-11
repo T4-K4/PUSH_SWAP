@@ -5,6 +5,8 @@ const UI = {
         const textA = document.getElementById('stack-a-text');
         const textB = document.getElementById('stack-b-text');
 
+        if (!boxA || !boxB || !textA || !textB) return;
+
         const total = a.length + b.length;
 
         if (total > 15) {
@@ -47,6 +49,7 @@ const UI = {
 
     renderPipeline(pipeline) {
         const pipe = document.getElementById('pipeline');
+        if (!pipe) return;
         pipe.innerHTML = '';
 
         if (pipeline.length > 25) {
@@ -77,11 +80,13 @@ const UI = {
                 pipe.appendChild(chip);
             });
         }
-        document.getElementById('user-moves-count').innerText = pipeline.length;
+        const userMoves = document.getElementById('user-moves-count');
+        if (userMoves) userMoves.innerText = pipeline.length;
     },
 
     renderCommandsPanel() {
         const panel = document.getElementById('cmd-source-list');
+        if (!panel) return;
         panel.innerHTML = '<div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 2px;">KOMUTLAR (Tıkla veya Sürükle)</div>';
         COMMANDS.forEach(item => {
             const card = document.createElement('div');
@@ -100,11 +105,14 @@ const UI = {
 
     renderTerminal(tab, initialStack) {
         const terminal = document.getElementById('terminal-view');
+        if (!terminal) return;
 
         if (tab === 'c') {
-            terminal.innerText = C_SOURCE_CODE;
+            if (terminal.contentEditable !== "true") {
+                terminal.innerText = C_SOURCE_CODE;
+            }
             terminal.scrollTop = 0;
-        } else {
+        } else if (tab === 'binary') {
             const sorted = [...initialStack].sort((x, y) => x - y);
             const n = initialStack.length;
             let maxBits = Math.ceil(Math.log2(n || 1));
@@ -119,12 +127,46 @@ const UI = {
             if (n > 35) binText += `... ve ${n - 35} sayi daha\n`;
             terminal.innerText = binText;
             terminal.scrollTop = 0;
+        } else if (tab === 'report') {
+            if (!AppState.lastTestReport || AppState.lastTestReport.length === 0) {
+                terminal.innerHTML = '<div style="color:var(--text-muted); padding:10px;">Henüz test çalıştırılmadı. "Kodu Patlatmayı Dene" butonuna basın.</div>';
+                return;
+            }
+
+            let html = `<div style="font-weight:bold; color:var(--accent-blue); margin-bottom:8px;">[42 ${AppState.checkerOS.toUpperCase()} CHECKER EVO TEST RAPORU]</div>`;
+            html += `<table class="test-report-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Test İsmi</th>
+                        <th>Denenen Input (ARG)</th>
+                        <th>Durum</th>
+                        <th>Detay / Barem</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            AppState.lastTestReport.forEach(row => {
+                const statusClass = row.status === 'PASSED' ? 'status-passed' : 'status-failed';
+                html += `<tr>
+                    <td>${row.id}</td>
+                    <td><b>${row.name}</b></td>
+                    <td style="color:#f59e0b;">${row.arg}</td>
+                    <td class="${statusClass}">${row.status}</td>
+                    <td>${row.detail}</td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>`;
+            terminal.innerHTML = html;
         }
     },
 
     toggleModal(id, show) {
         const modal = document.getElementById(id);
-        if (modal) modal.style.display = show ? 'flex' : 'none';
+        if (modal) {
+            modal.style.display = show ? 'flex' : 'none';
+        }
     },
 
     showToast(msg, type) {
@@ -134,7 +176,7 @@ const UI = {
         t.className = `toast toast-${type}`;
         t.innerText = msg;
         document.body.appendChild(t);
-        setTimeout(() => t.remove(), 3200);
+        setTimeout(() => { if (t) t.remove(); }, 3200);
     },
 
     triggerConfetti() {
@@ -148,7 +190,7 @@ const UI = {
         const particles = [];
         const colors = ['#00d2ff', '#00e676', '#ffd600', '#ff1744', '#9d4edd', '#ffffff'];
 
-        for (let i = 0; i < 200; i++) {
+        for (let i = 0; i < 220; i++) {
             particles.push({
                 x: Math.random() * canvas.width,
                 y: Math.random() * canvas.height - canvas.height,

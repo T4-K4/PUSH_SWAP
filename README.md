@@ -1,67 +1,96 @@
-kodun yazılı olduğu dosya üzerine sağ tık yapılıp "Open ın ıntegrated browser" basıp test edebilirsiniz.
-kullanım kılavuzu sistem içinde mevcut.
-# 42 Push_swap Master Trainer 🚀
+# 42 PUSH_SWAP MASTER TRAINER & EVALUATION TOOL
 
-42 Okulu müfredatında yer alan **push_swap** projesini C dilinde kodlamadan önce; yığın (stack) mekaniğini, operasyonları ve sıralama algoritmalarını (Chunk Sort, Radix Sort vb.) görselleştirerek kavramanızı sağlayan interaktif bir web simülatörüdür.
+Modern arayüzlü, 42 Push_swap projesi için geliştirilmiş algoritma simülatörü, görselleştiricisi ve resmi **42 Evaluation Scale (Akran Değerlendirme)** test aracı.
 
 ---
 
-## 📌 Özellikler
+## 🚀 Proje Hakkında
 
-- **Görsel Yığın Alanı (Stack A & B):** Sayıların büyüklüğüne göre dinamik boyutlanan daireler ve 15+ eleman için optimize edilmiş kompakt liste görünümü.
-- **Komut Hattı & Pipeline:** Komutları tıklayarak veya sürükle-bırak yöntemiyle sıraya dizme, 25+ hamle için özet kullanım matrisi.
-- **3 Farklı Oyun / Çalışma Modu:**
-  - 🏆 **Yarışma Modu:** 13 aşamalı zorluk seviyesi, 25 dakikalık süre kısıtı ve yerel skor tablosu (Leaderboard).
-  - 🧘‍♂️ **Serbest Antrenman:** 3 ile 15 arasında serbest eleman seçimiyle pratik yapma imkanı.
-  - 🛠️ **Cerat Modu:** Manuel sayı girişi veya 500, 1000, 1500, 2000 boyutunda rastgele devasa dizilerle test.
-- **Oto-Çözücü (Chunk Sort Algoritması):** 500 elemanı 42 baremlerine uygun şekilde (< 5500 hamle) tek tıkla simüle eden dahili optimize algoritma.
-- **Çift Modlu Terminal:**
-  - **C Kaynak Kodu:** Gerçek 42 normuna uygun çift yönlü/tek yönlü liste pointer operasyonları (`sa`, `pb`, `ra`, `rrb` vb.).
-  - **Binary (Radix):** $O(n \log n)$ Radix sıralamasının bit bazlı dönüşümünü ve indis analizini gösteren canlı çıktı.
+Bu proje, 42 müfredatındaki `push_swap` projesinin algoritma mantığını ve yığın dinamiğini kavramak; akran değerlendirmesi (peer-evaluation) sırasında öğrencinin kodunu GitHub üzerinden anında çekip resmi barem kurallarına göre test etmek amacıyla geliştirilmiştir.
+
+Uygulama; sıfır harici kütüphane (zero-dependency) prensibiyle saf JavaScript (ES6+), HTML5 ve modern responsive CSS mimarisiyle inşa edilmiştir.
 
 ---
 
-## 🎯 Puanlama ve Seviye Geçiş Kuralları
+## 🎮 Modlar ve Özellikler
 
-| Durum | Puan | Açıklama |
-| :--- | :---: | :--- |
-| **İdeal Çözüm** | **100 Puan** | Dizi sıralanır ve 42 barem hamle sayısıyla birebir aynı adımda bitirilir. |
-| **Daha Az Hamle** | **200 Puan** | Sistemin bulduğu referans çözümden daha az adımla sıralanır. |
-| **Fazla Hamle** | **50 Puan** | Dizi sıralanır ancak ideal baremden uzun sürer (Tekrar denenmelidir). |
-| **Başarısız** | **0 Puan** | Dizi sıralanmamışsa veya Stack B boş bırakılmamışsa. |
+### 1. 🏆 Yarışma Modu (Compete)
+* 3 elemandan 15 elemana kadar kademeli 13 seviye.
+* 25 dakikalık geri sayım sayacı ve duraklatma seçeneği.
+* 42 baremine uygun ideal adım hedefleri ve puanlama mekanizması.
+* Yerel depolama (`localStorage`) tabanlı global skor tablosu.
+
+### 2. 🧘‍♂️ Serbest Antrenman (Practice)
+* 3, 4, 5, 6, 8, 10 veya 15 elemanlık rastgele diziler.
+* Süre ve puan kısıtı olmadan algoritma denemeleri.
+
+### 3. 🛠️ Cerat Modu (Büyük Veri & Özel Diziler)
+* Manuel sayı girişi (virgül veya boşlukla ayrılmış).
+* 500, 1000, 1500 ve 2000 elemanlı rastgele veri setleri oluşturma.
+* Tek tıkla çalışan optimize çözücü (`autoSolve`).
+
+### 4. 🧪 Evo & 42 Checker Test Laboratuvarı
+* **GitHub Entegrasyonu:** Herkese açık bir GitHub push_swap repo linki verildiğinde `git/trees` API ile alt dizinler dahil tüm `.c` kaynak kodlarını otomatik bulur, çeker ve terminale yükler.
+* **Akıllı Algoritma Analizi:** Çekilen kodun mimarisini (Radix Sort, Turk Algorithm / Cost, Chunk Sort) ve C içindeki `chunk` parametrelerini otomatik analiz eder.
+* **100 ve 500 Sayı Testi:** Üretilen rastgele dizileri, kullanıcının GitHub'dan çekilen kendi C algoritmasıyla simüle eder.
+* **Resmi Barem Skalası (Evaluation Scale):**
+  * **100 Sayı:**
+    * `< 700`: 5/5 (Mükemmel)
+    * `< 900`: 4/5
+    * `< 1100`: 3/5
+    * `< 1300`: 2/5
+    * `< 1500`: 1/5
+    * $\ge 1500$: 0 Puan (FAILED)
+  * **500 Sayı:**
+    * `< 5500`: 5/5 (Mükemmel)
+    * `< 7000`: 4/5
+    * `< 8500`: 3/5
+    * `< 10000`: 2/5
+    * `< 11500`: 1/5
+    * $\ge 11500$: 0 Puan (FAILED)
+* **💥 Kodu Patlatmayı Dene (Resmi Test Paketi):**
+  * **Error Management:** Non-numeric, duplicate, `> INT_MAX` ve parametresiz çağırma kontrolleri.
+  * **Identity Test:** `42`, `2 3`, `0 1 2 3`, `0..9` gibi zaten sıralı dizilerde kesinlikle **0 hamle** kontrolü.
+  * **Simple Version:** `2 1 0` için 2 veya 3 hamle kontrolü.
+  * **Another Simple Version:** `1 5 2 4 3` için $\le 12$ hamle (8 hamle Kudos) kontrolü.
+  * **Tırnaklı Tek Parametre Desteği:** `ARG="10 20 30 40 50"` string parsing testi.
+* **Çoklu OS Checker:** 🐧 Linux, 🍎 macOS ve 🪟 Windows resmi checker mantığı ile anında tek tıkla test.
+* **Konfeti Animasyonu:** Kod tüm resmi evaluation testlerinden başarıyla geçerse canvas tabanlı kutlama animasyonu.
 
 ---
 
-## 🛠️ Desteklenen Komutlar
+## 🛠️ Desteklenen Push_swap Komutları
 
 | Komut | Açıklama |
-| :---: | :--- |
-| `sa` / `sb` | Stack A / B tepesindeki ilk 2 elemanı takas eder (swap). |
-| `ss` | `sa` ve `sb` işlemlerini eşzamanlı çalıştırır. |
-| `pa` / `pb` | Stack B'den A'ya veya Stack A'dan B'ye en üstteki elemanı iter (push). |
-| `ra` / `rb` | Yığını yukarı kaydırır; en üstteki eleman en alta geçer (rotate). |
-| `rr` | `ra` ve `rb` işlemlerini eşzamanlı çalıştırır. |
-| `rra` / `rrb` | Yığını aşağı kaydırır; en alttaki eleman en üste gelir (reverse rotate). |
-| `rrr` | `rra` ve `rrb` işlemlerini eşzamanlı çalıştırır. |
+| :--- | :--- |
+| `sa` | Stack A'nın tepesindeki ilk 2 elemanı takas eder. |
+| `sb` | Stack B'nin tepesindeki ilk 2 elemanı takas eder. |
+| `ss` | `sa` ve `sb` operasyonlarını eş zamanlı yürütür. |
+| `pa` | Stack B'nin en üstündeki sayıyı Stack A'nın tepesine atar. |
+| `pb` | Stack A'nın en üstündeki sayıyı Stack B'nin tepesine atar. |
+| `ra` | Stack A'yı yukarı kaydırır; tepe eleman dibe geçer. |
+| `rb` | Stack B'yi yukarı kaydırır; tepe eleman dibe geçer. |
+| `rr` | `ra` ve `rb` operasyonlarını eş zamanlı yürütür. |
+| `rra` | Stack A'yı aşağı kaydırır; dip eleman tepeye gelir. |
+| `rrb` | Stack B'yi aşağı kaydırır; dip eleman tepeye gelir. |
+| `rrr` | `rra` ve `rrb` operasyonlarını eş zamanlı yürütür. |
 
 ---
 
-## 📂 Proje Dizin Yapısı
-
-Proje, okunabilirliği ve bakımı kolaylaştırmak adına modüler bir yapıda tasarlanmıştır:
+## 📁 Proje Dosya Ağacı
 
 ```text
-push_swap_trainer/
-├── index.html              # Arayüz iskeleti ve modal pencereler
+PUSH_SWAP/
 ├── css/
-│   ├── style.css           # CSS değişkenleri, sayfa düzeni ve omurga
-│   ├── components.css      # Toplar, butonlar, çipler, terminal ve modallar
-│   └── responsive.css      # Mobil ve tablet ekran uyumluluğu
-└── js/
-    ├── config.js           # Sabit komut listesi ve C kaynak kod şablonları
-    ├── state.js            # Uygulamanın anlık durumu (AppState)
-    ├── engine.js           # Temel Push_swap operasyonları ve dizi üretimleri
-    ├── solver.js           # Barem hesaplayıcı ve K-Sort / Chunk Sort çözücü
-    ├── ui.js               # DOM render fonksiyonları, görsel toplar ve bildirimler
-    └── main.js             # Event dinleyicileri, zamanlayıcı ve akış yöneticisi
-
+│   ├── components.css    # Modallar, butonlar, badge'ler ve test rapor tablosu
+│   ├── responsive.css    # Mobil ve tablet uyumluluk kuralları
+│   └── style.css         # Ana renk değişkenleri, terminal ve grid yerleşimi
+├── js/
+│   ├── config.js         # Komut sözlüğü ve C kaynak kodu taslakları
+│   ├── engine.js         # Yığın motoru (applyOp) ve isSorted kontrolü
+│   ├── main.js           # Sayfa yaşam döngüsü, mod yönetimi ve GitHub Tree API
+│   ├── solver.js         # 42 algoritma çözücüleri, profil çıkarıcı ve Evo test motoru
+│   ├── state.js          # Uygulama durum değişkenleri (AppState)
+│   └── ui.js             # Yığın çizimi, pipeline, toast ve konfeti animasyonu
+├── index.html            # Ana uygulama şablonu
+└── README.md             # Dokümantasyon

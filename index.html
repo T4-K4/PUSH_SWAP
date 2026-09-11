@@ -35,7 +35,7 @@
                 <p>Soldaki komut kartlarını sağdaki işlem sırasına sürükleyip bırakın veya doğrudan karta tıklayın. Listenizi tamamlayınca <b>Simüle Et & Doğrula</b> butonuna basın.</p>
 
                 <h4>💻 C Kodu ve Binary Terminali</h4>
-                <p>Sağ paneldeki <b>C Kodu</b> sekmesinde operasyonların arkasındaki gerçek C fonksiyon gövdelerini ve pointer manipülasyonlarını görebilirsiniz. <b>Binary (Radix)</b> sekmesinde ise $O(n \log n)$ Radix sıralamasının bit bazlı mantığını inceleyebilirsiniz.</p>
+                <p>Sağ paneldeki <b>C Kodu</b> sekmesinde operasyonların arkasındaki gerçek C fonksiyon gövdelerini görebilirsiniz. <b>Binary (Radix)</b> sekmesinde ise $O(n \log n)$ Radix sıralamasının bit bazlı mantığını inceleyebilirsiniz.</p>
 
                 <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
                     <button class="btn btn-run" onclick="closeInitialGuide()" style="padding: 10px 20px; font-size: 13px;">Okudum, Giriş Yap →</button>
@@ -78,7 +78,7 @@
             <div class="mode-card" onclick="selectMode('evaluator')">
                 <div class="mode-icon">🧪</div>
                 <div class="mode-title">Evo & Checker Modu</div>
-                <div class="mode-desc">Linux, Mac, Win checker simülasyonu ve kod patlatma stres testleri.</div>
+                <div class="mode-desc">GitHub'dan kod çek, 100/500 sayıyla dene, OS checker ve stres testleriyle kodu patlat.</div>
             </div>
         </div>
     </div>
@@ -144,12 +144,16 @@
                     <button class="cerat-btn" onclick="loadCeratRandom(2000)">2000</button>
                 </div>
 
-                <!-- EVO MODU KONTROLLERİ -->
-                <div id="eval-controller" class="cerat-config" style="display: none; gap: 6px;">
-                    <button class="cerat-btn active-os" id="btn-os-linux" onclick="setCheckerOS('linux')">🐧 Linux Checker</button>
-                    <button class="cerat-btn" id="btn-os-mac" onclick="setCheckerOS('mac')">🍎 macOS Checker</button>
-                    <button class="cerat-btn" id="btn-os-win" onclick="setCheckerOS('win')">🪟 Windows Checker</button>
+                <!-- EVO MODU CHECKER, TEST & SAYI KONTROLLERİ -->
+                <div id="eval-controller" class="cerat-config" style="display: none; gap: 6px; flex-wrap: wrap;">
+                    <button class="cerat-btn active-os" id="btn-os-linux" onclick="setAndRunChecker('linux')">🐧 Linux Checker</button>
+                    <button class="cerat-btn" id="btn-os-mac" onclick="setAndRunChecker('mac')">🍎 macOS Checker</button>
+                    <button class="cerat-btn" id="btn-os-win" onclick="setAndRunChecker('win')">🪟 Windows Checker</button>
+                    <span>Dene:</span>
+                    <button class="cerat-btn" onclick="loadEvalRandom(100)">100 Sayı</button>
+                    <button class="cerat-btn" onclick="loadEvalRandom(500)">500 Sayı</button>
                     <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()">💥 Kodu Patlat</button>
+                    <button class="cerat-btn" style="background:#475569; color:#fff;" onclick="resetEvalMode()">🔄 Sayfayı Sıfırla</button>
                 </div>
 
                 <span id="live-step-tracker" style="color: var(--accent-blue);">Canlı Adım: Bekleniyor</span>
@@ -196,9 +200,16 @@
             </div>
 
             <div class="terminal-panel">
+                <!-- GITHUB REPO ÇEKME ALANI -->
+                <div id="github-bar" style="display: none; gap: 6px; padding: 4px 0 8px 0; border-bottom: 1px solid #1e2436; margin-bottom: 6px;">
+                    <input type="text" id="github-repo-input" placeholder="GitHub Repo URL (örn: github.com/user/push_swap)" style="flex:1; background:#141724; border:1px solid var(--border-color); border-radius:6px; color:#fff; font-size:11px; padding:4px 8px; outline:none;">
+                    <button class="cerat-btn" onclick="fetchGithubRepo()" style="background:#0284c7; color:#fff;">Kodu Çek</button>
+                </div>
+
                 <div class="terminal-tabs">
                     <button id="tab-c-btn" class="term-tab-btn active" onclick="switchTerminalTab('c')">C Kaynak Kodu</button>
                     <button id="tab-bin-btn" class="term-tab-btn" onclick="switchTerminalTab('binary')">Binary (Radix)</button>
+                    <button id="tab-report-btn" class="term-tab-btn" onclick="switchTerminalTab('report')" style="display:none;">🧪 Test Raporu</button>
                 </div>
                 <div class="terminal-body" id="terminal-view"></div>
             </div>

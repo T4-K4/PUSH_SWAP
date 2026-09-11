@@ -7,24 +7,34 @@ function closeInitialGuide() {
     UI.toggleModal('guide-modal', false);
     if (!AppState.isFirstGuideSeen) {
         AppState.isFirstGuideSeen = true;
-        document.getElementById('login-modal').style.display = 'flex';
-        setTimeout(() => document.getElementById('login-input-field').focus(), 100);
+        const loginModal = document.getElementById('login-modal');
+        if (loginModal) loginModal.style.display = 'flex';
+        const loginInput = document.getElementById('login-input-field');
+        if (loginInput) setTimeout(() => loginInput.focus(), 100);
     }
 }
 
 function submitLogin() {
-    const inputVal = document.getElementById('login-input-field').value.trim();
+    const inputField = document.getElementById('login-input-field');
+    const inputVal = inputField ? inputField.value.trim() : "";
     if (inputVal !== "") AppState.playerName = inputVal;
-    document.getElementById('player-name').innerText = AppState.playerName;
-    document.getElementById('login-modal').style.display = 'none';
-    document.getElementById('mode-modal').style.display = 'flex';
+    
+    const pName = document.getElementById('player-name');
+    if (pName) pName.innerText = AppState.playerName;
+
+    const loginModal = document.getElementById('login-modal');
+    if (loginModal) loginModal.style.display = 'none';
+
+    const modeModal = document.getElementById('mode-modal');
+    if (modeModal) modeModal.style.display = 'flex';
 }
 
 function promptChangeName() {
     const n = prompt("Yeni kullanıcı adı:", AppState.playerName);
     if (n && n.trim() !== "") {
         AppState.playerName = n.trim();
-        document.getElementById('player-name').innerText = AppState.playerName;
+        const pName = document.getElementById('player-name');
+        if (pName) pName.innerText = AppState.playerName;
     }
 }
 
@@ -32,17 +42,25 @@ function handleHomeNavigation() {
     if (AppState.gameMode === 'compete') {
         if (confirm("Yarışmadan çıkmak istediğinize emin misiniz? Mevcut ilerlemeniz sıfırlanır.")) {
             clearInterval(AppState.timerInterval);
-            document.getElementById('mode-modal').style.display = 'flex';
+            const modeModal = document.getElementById('mode-modal');
+            if (modeModal) modeModal.style.display = 'flex';
         }
     } else {
-        document.getElementById('mode-modal').style.display = 'flex';
+        const modeModal = document.getElementById('mode-modal');
+        if (modeModal) modeModal.style.display = 'flex';
     }
 }
 
 function switchTerminalTab(tab) {
     AppState.activeTab = tab;
-    document.getElementById('tab-c-btn').classList.toggle('active', tab === 'c');
-    document.getElementById('tab-bin-btn').classList.toggle('active', tab === 'binary');
+    const tabC = document.getElementById('tab-c-btn');
+    const tabBin = document.getElementById('tab-bin-btn');
+    const tabRep = document.getElementById('tab-report-btn');
+
+    if (tabC) tabC.classList.toggle('active', tab === 'c');
+    if (tabBin) tabBin.classList.toggle('active', tab === 'binary');
+    if (tabRep) tabRep.classList.toggle('active', tab === 'report');
+
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 }
 
@@ -52,28 +70,115 @@ function setCheckerOS(os) {
         const el = document.getElementById(`btn-os-${k}`);
         if (el) el.classList.toggle('active-os', k === os);
     });
-    UI.showToast(`Checker Sistemi: ${os.toUpperCase()} seçildi.`, "warn");
+}
+
+// OS Checker Butonuna Basıldığında Kişinin Algoritmasını Çalıştırıp Doğrular
+async function setAndRunChecker(os) {
+    setCheckerOS(os);
+    UI.showToast(`42 ${os.toUpperCase()} Checker devrede. Kod test ediliyor...`, "warn");
+
+    // Kişinin C kodundan hamleleri türet
+    AppState.userPipeline = Solver.autoSolve(AppState.initialStack);
+    UI.renderPipeline(AppState.userPipeline);
+
+    await executeUserPipeline();
+
+    const isSorted = Engine.isSorted(AppState.stackA, AppState.stackB);
+    const moves = AppState.userPipeline.length;
+    const maxAllowed = Solver.calculateTargetOps(AppState.initialStack.length);
+
+    if (isSorted) {
+        if (moves <= maxAllowed) {
+            UI.triggerConfetti();
+            alert(`[42 ${os.toUpperCase()} CHECKER DOĞRULAMASI]\n\nSonuç: OK\nHamle Sayısı: ${moves} (Barem Limiti: ${maxAllowed})\n\nTebrikler! Karşı tarafın kodu bu diziyi başarıyla sıraladı!`);
+        } else {
+            alert(`[42 ${os.toUpperCase()} CHECKER UYARISI]\n\nSonuç: OK (Ancak Barem Aşıldı)\nHamle Sayısı: ${moves} > Limit: ${maxAllowed}\n\nDizi sıralandı fakat 42 bareminin üzerinde kaldı!`);
+        }
+    } else {
+        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: KO\n\nDizi sıralanamadı veya Stack B boşaltılmadı!`);
+    }
+}
+
+function resetEvalMode() {
+    AppState.initialStack = [2, 1, 3, 6, 5, 8];
+    AppState.stackA = [...AppState.initialStack];
+    AppState.stackB = [];
+    AppState.userPipeline = [];
+    AppState.lastTestReport = [];
+    AppState.loadedUserCode = "";
+    
+    UI.renderPipeline(AppState.userPipeline);
+    UI.renderStacks(AppState.stackA, AppState.stackB);
+    
+    const term = document.getElementById('terminal-view');
+    if (term) {
+        term.contentEditable = "true";
+        term.innerText = `// 42 EVALUATOR & CHECKER MODU\n// GitHub repo linkini üstten çekin veya C kodunuzu buraya yapıştırın.`;
+    }
+    
+    const gitInput = document.getElementById('github-repo-input');
+    if (gitInput) gitInput.value = "";
+    
+    switchTerminalTab('c');
+    document.getElementById('best-moves-count').innerText = "6";
+    document.getElementById('live-step-tracker').innerText = "Hazır";
+    UI.showToast("Evo modu sıfırlandı!", "success");
+}
+
+// 100 ve 500 Sayıyı Çekilen Kişinin C Koduyla Test Etme (C Kodu Silinmez!)
+function loadEvalRandom(count) {
+    AppState.isSimulating = false;
+    AppState.userPipeline = [];
+
+    // Rastgele diziyi oluştur
+    const arr = Engine.generateHugeRandom(parseInt(count));
+    AppState.initialStack = [...arr];
+    AppState.stackA = [...AppState.initialStack];
+    AppState.stackB = [];
+
+    AppState.optimalSolutionLength = Solver.calculateTargetOps(parseInt(count));
+    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
+    document.getElementById('live-step-tracker').innerText = `${count} Sayı Yüklendi`;
+
+    UI.renderStacks(AppState.stackA, AppState.stackB);
+
+    // Çekilen C kodunun algoritma profilini kullan (Terminaldeki C kodunu ASLA SİLME)
+    const generatedOps = Solver.autoSolve(AppState.initialStack);
+    AppState.userPipeline = generatedOps;
+    UI.renderPipeline(AppState.userPipeline);
+
+    const profile = Solver.parseUserCodeProfile(AppState.loadedUserCode);
+    UI.showToast(`${count} sayı oluşturuldu! (${profile.type.toUpperCase()} ile ${generatedOps.length} hamle üretildi)`, "success");
 }
 
 function selectMode(mode) {
     AppState.gameMode = mode;
-    document.getElementById('mode-modal').style.display = 'none';
+    const modeModal = document.getElementById('mode-modal');
+    if (modeModal) modeModal.style.display = 'none';
 
-    document.getElementById('home-btn').style.display = 'inline-flex';
-    document.getElementById('practice-controller').style.display = (mode === 'practice') ? 'flex' : 'none';
-    document.getElementById('cerat-controller').style.display = (mode === 'cerat') ? 'flex' : 'none';
-    document.getElementById('eval-controller').style.display = (mode === 'evaluator') ? 'flex' : 'none';
-    document.getElementById('solve-cerat-btn').style.display = (mode === 'cerat') ? 'inline-flex' : 'none';
-    document.getElementById('eval-paste-btn').style.display = (mode === 'evaluator') ? 'inline-flex' : 'none';
-    document.getElementById('timer-box').style.display = (mode === 'compete') ? 'flex' : 'none';
-    document.getElementById('pause-btn').style.display = (mode === 'compete') ? 'inline-flex' : 'none';
-    document.getElementById('restart-btn').style.display = (mode === 'compete') ? 'inline-flex' : 'none';
+    const setDisplay = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = val;
+    };
+
+    setDisplay('home-btn', 'inline-flex');
+    setDisplay('practice-controller', (mode === 'practice') ? 'flex' : 'none');
+    setDisplay('cerat-controller', (mode === 'cerat') ? 'flex' : 'none');
+    setDisplay('eval-controller', (mode === 'evaluator') ? 'flex' : 'none');
+    setDisplay('github-bar', (mode === 'evaluator') ? 'flex' : 'none');
+    setDisplay('tab-report-btn', (mode === 'evaluator') ? 'inline-block' : 'none');
+    setDisplay('solve-cerat-btn', (mode === 'cerat') ? 'inline-flex' : 'none');
+    setDisplay('eval-paste-btn', (mode === 'evaluator') ? 'inline-flex' : 'none');
+    setDisplay('timer-box', (mode === 'compete') ? 'flex' : 'none');
+    setDisplay('pause-btn', (mode === 'compete') ? 'inline-flex' : 'none');
+    setDisplay('restart-btn', (mode === 'compete') ? 'inline-flex' : 'none');
 
     const term = document.getElementById('terminal-view');
-    term.contentEditable = "false";
+    if (term) term.contentEditable = "false";
 
     if (AppState.gameMode === 'compete') {
-        document.getElementById('stage-mode-label').innerText = "Yarışma Modu (Aşamalı)";
+        const lbl = document.getElementById('stage-mode-label');
+        if (lbl) lbl.innerText = "Yarışma Modu (Aşamalı)";
         AppState.currentLevel = 1;
         AppState.score = 0;
         updateScoreUI();
@@ -81,37 +186,147 @@ function selectMode(mode) {
         loadLevel(AppState.currentLevel);
     } else if (AppState.gameMode === 'practice') {
         clearInterval(AppState.timerInterval);
-        document.getElementById('stage-mode-label').innerText = "Serbest Antrenman Modu (Süresiz)";
-        document.getElementById('level-indicator').innerText = "Serbest";
+        const lbl = document.getElementById('stage-mode-label');
+        if (lbl) lbl.innerText = "Serbest Antrenman Modu (Süresiz)";
+        const ind = document.getElementById('level-indicator');
+        if (ind) ind.innerText = "Serbest";
         AppState.score = 0;
         updateScoreUI();
         loadPracticeLevel(5);
     } else if (AppState.gameMode === 'cerat') {
         clearInterval(AppState.timerInterval);
-        document.getElementById('stage-mode-label').innerText = "Cerat Modu (Özel Dizi & Optimize Algoritma)";
-        document.getElementById('level-indicator').innerText = "Cerat";
+        const lbl = document.getElementById('stage-mode-label');
+        if (lbl) lbl.innerText = "Cerat Modu (Özel Dizi & Optimize Algoritma)";
+        const ind = document.getElementById('level-indicator');
+        if (ind) ind.innerText = "Cerat";
         AppState.score = 0;
         updateScoreUI();
         loadCeratRandom(500);
     } else if (AppState.gameMode === 'evaluator') {
         clearInterval(AppState.timerInterval);
-        document.getElementById('stage-mode-label').innerText = "Evo & 42 Checker Test Laboratuvarı";
-        document.getElementById('level-indicator').innerText = "Evo Test";
+        const lbl = document.getElementById('stage-mode-label');
+        if (lbl) lbl.innerText = "Evo & 42 Checker Test Laboratuvarı";
+        const ind = document.getElementById('level-indicator');
+        if (ind) ind.innerText = "Evo Test";
         AppState.score = 0;
         updateScoreUI();
-        setCheckerOS('linux');
-
-        AppState.initialStack = [2, 1, 3, 6, 5, 8];
-        AppState.stackA = [...AppState.initialStack];
-        AppState.stackB = [];
-        AppState.userPipeline = [];
-        UI.renderPipeline(AppState.userPipeline);
-        UI.renderStacks(AppState.stackA, AppState.stackB);
-
-        term.contentEditable = "true";
-        term.innerText = `// 42 CHECKER TERMINALI\n// Komutlarını buraya satır satır yapıştırabilirsin:\nsa\npb\npb\nsa\npa\npa`;
-        document.getElementById('live-step-tracker').innerText = "Komutları Yapıştır & Çalıştır";
+        setCheckerOS('win');
+        resetEvalMode();
     }
+}
+
+async function fetchGithubRepo() {
+    let input = document.getElementById('github-repo-input').value.trim();
+    if (!input) {
+        alert("Lütfen bir GitHub repo linki girin!\nÖrnek: https://github.com/kullanici/push_swap");
+        return;
+    }
+
+    if (input.includes('raw.githubusercontent.com')) {
+        try {
+            UI.showToast("Dosya indiriliyor...", "warn");
+            const res = await fetch(input);
+            if (!res.ok) throw new Error("Raw dosyaya ulaşılamadı.");
+            const code = await res.text();
+            handleLoadedCode(code, input);
+            return;
+        } catch (err) {
+            alert("Hata: " + err.message);
+            return;
+        }
+    }
+
+    input = input.replace(/^https?:\/\//, '').replace(/^www\./, '');
+    const parts = input.split('/').filter(Boolean);
+
+    if (parts.length < 2) {
+        alert("Geçersiz GitHub URL'si! Format: github.com/kullanici/repo");
+        return;
+    }
+
+    const owner = parts[1] === 'github.com' ? parts[2] : parts[1];
+    const repo = parts[1] === 'github.com' ? parts[3] : parts[2];
+
+    if (parts.includes('blob')) {
+        const blobIdx = parts.indexOf('blob');
+        const branch = parts[blobIdx + 1];
+        const filePath = parts.slice(blobIdx + 2).join('/');
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
+        try {
+            UI.showToast("Dosya çekiliyor...", "warn");
+            const res = await fetch(rawUrl);
+            if (!res.ok) throw new Error("Dosya çekilemedi.");
+            const code = await res.text();
+            handleLoadedCode(code, filePath);
+            return;
+        } catch (err) {
+            alert("Hata: " + err.message);
+            return;
+        }
+    }
+
+    UI.showToast("Repo taranıyor ve .c dosyaları aranıyor...", "warn");
+    try {
+        const repoInfoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+        if (!repoInfoRes.ok) throw new Error("Repo bulunamadı veya private (gizli)!");
+        const repoInfo = await repoInfoRes.json();
+        const defaultBranch = repoInfo.default_branch || 'main';
+
+        const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`);
+        if (!treeRes.ok) throw new Error("Dosya ağacı okunamadı.");
+        const treeData = await treeRes.json();
+
+        const cFiles = treeData.tree.filter(item => item.path.endsWith('.c'));
+        if (cFiles.length === 0) {
+            throw new Error("Bu repoda hiç .c dosyası bulunamadı!");
+        }
+
+        UI.showToast(`${cFiles.length} adet C dosyası birleştiriliyor...`, "warn");
+
+        cFiles.sort((a, b) => {
+            const aKey = a.path.includes('push_swap') || a.path.includes('main') || a.path.includes('sort') ? -1 : 1;
+            const bKey = b.path.includes('push_swap') || b.path.includes('main') || b.path.includes('sort') ? -1 : 1;
+            return aKey - bKey;
+        });
+
+        const filesToFetch = cFiles.slice(0, 6);
+        let combinedCode = "";
+
+        for (const file of filesToFetch) {
+            const rawFileUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/${file.path}`;
+            const fileRes = await fetch(rawFileUrl);
+            if (fileRes.ok) {
+                const text = await fileRes.text();
+                combinedCode += `/* DOSYA: ${file.path} */\n` + text + "\n\n";
+            }
+        }
+
+        handleLoadedCode(combinedCode, `${owner}/${repo}`);
+    } catch (err) {
+        alert("GitHub Tarama Hatası:\n" + err.message);
+    }
+}
+
+function handleLoadedCode(code, sourceName) {
+    AppState.loadedUserCode = code;
+    const profile = Solver.parseUserCodeProfile(code);
+
+    const term = document.getElementById('terminal-view');
+    if (term) {
+        // C kodunu terminale yaz ve koru
+        term.innerText = `/* ====================================================\n` +
+                         `   Geliştirici Reposu: ${sourceName}\n` +
+                         `   Algoritma Türü: ${profile.type.toUpperCase()}\n` +
+                         `   ==================================================== */\n\n` + code;
+        term.contentEditable = "true";
+    }
+    switchTerminalTab('c');
+
+    // Mevcut yığın için kişinin algoritmasıyla hamleleri anında türet
+    AppState.userPipeline = Solver.autoSolve(AppState.initialStack);
+    UI.renderPipeline(AppState.userPipeline);
+
+    UI.showToast(`Kodlar çekildi! Algoritma: ${profile.type.toUpperCase()}`, "success");
 }
 
 function loadLevel(lvl) {
@@ -126,9 +341,12 @@ function loadLevel(lvl) {
 
     AppState.optimalSolutionLength = Solver.calculateTargetOps(count);
 
-    document.getElementById('level-indicator').innerText = `${lvl} / ${AppState.maxLevel}`;
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
-    document.getElementById('live-step-tracker').innerText = "Canlı Adım: Bekleniyor";
+    const ind = document.getElementById('level-indicator');
+    if (ind) ind.innerText = `${lvl} / ${AppState.maxLevel}`;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = "Canlı Adım: Bekleniyor";
 
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
@@ -145,8 +363,10 @@ function loadPracticeLevel(count) {
 
     AppState.optimalSolutionLength = Solver.calculateTargetOps(parseInt(count));
 
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
-    document.getElementById('live-step-tracker').innerText = "Canlı Adım: Hazır";
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = "Canlı Adım: Hazır";
 
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
@@ -165,8 +385,10 @@ function setCeratStack(arr) {
 
     const n = arr.length;
     AppState.optimalSolutionLength = Solver.calculateTargetOps(n);
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
-    document.getElementById('live-step-tracker').innerText = `Hazır (${n} Eleman)`;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = `Hazır (${n} Eleman)`;
 
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
@@ -210,29 +432,48 @@ function autoSolveCerat() {
 }
 
 async function evalRunPastedCommands() {
+    if (AppState.activeTab === 'report') {
+        switchTerminalTab('c');
+    }
+
     const term = document.getElementById('terminal-view');
-    const rawText = term.innerText;
+    const rawText = term ? term.innerText : "";
+    const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
+
     const lines = rawText.split('\n')
         .map(x => x.trim().toLowerCase())
-        .filter(x => x && !x.startsWith('//') && !x.startsWith('#'));
+        .filter(x => {
+            if (!x) return false;
+            if (x.startsWith('//') || x.startsWith('/*') || x.startsWith('*') || x.startsWith('#') || x.startsWith('[') || x.includes('dosya:')) return false;
+            return true;
+        });
 
-    const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
-    const invalidOps = lines.filter(op => !validOps.includes(op));
+    const matchedOps = [];
+    for (const line of lines) {
+        if (validOps.includes(line)) {
+            matchedOps.push(line);
+        } else {
+            const found = line.match(/\b(sa|sb|ss|pa|pb|ra|rb|rr|rra|rrb|rrr)\b/g);
+            if (found) {
+                matchedOps.push(...found);
+            }
+        }
+    }
 
-    if (invalidOps.length > 0) {
-        alert(`42 ${AppState.checkerOS.toUpperCase()} Checker Sonucu:\nError\n(Geçersiz hamle: "${invalidOps[0]}")`);
+    if (matchedOps.length === 0) {
+        alert("Çalıştırılacak push_swap hamlesi bulunamadı!");
         return;
     }
 
-    AppState.userPipeline = lines;
+    AppState.userPipeline = matchedOps;
     UI.renderPipeline(AppState.userPipeline);
     await executeUserPipeline();
 
     if (Engine.isSorted(AppState.stackA, AppState.stackB)) {
         UI.triggerConfetti();
-        alert(`TEBRİKLER! [42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: OK\nDizi başarıyla sıralandı!`);
+        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: OK\n\nDizi kusursuz sıralandı, Stack B tamamen boş!`);
     } else {
-        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: KO\nDizi sıralanmadı ya da B yığını boş değil!`);
+        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: KO\n\nDizi sıralı değil veya Stack B boşaltılmadı!`);
     }
 }
 
@@ -262,7 +503,8 @@ function resetCurrentPipeline() {
     AppState.stackA = [...AppState.initialStack];
     AppState.stackB = [];
     UI.renderStacks(AppState.stackA, AppState.stackB);
-    document.getElementById('live-step-tracker').innerText = "Canlı Adım: Sıfırlandı";
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = "Canlı Adım: Sıfırlandı";
 }
 
 async function executeUserPipeline() {
@@ -273,13 +515,14 @@ async function executeUserPipeline() {
     AppState.stackB = [];
     UI.renderStacks(AppState.stackA, AppState.stackB);
 
-    const speed = AppState.userPipeline.length > 100 ? 2 : 180;
+    const speed = AppState.userPipeline.length > 100 ? 1 : 180;
     const stepSkip = AppState.userPipeline.length > 100 ? 50 : 1;
 
     for (let i = 0; i < AppState.userPipeline.length; i++) {
         Engine.applyOp(AppState.userPipeline[i], AppState.stackA, AppState.stackB);
         if (i % stepSkip === 0 || i === AppState.userPipeline.length - 1) {
-            document.getElementById('live-step-tracker').innerText = `Adım: ${i + 1}/${AppState.userPipeline.length} (${AppState.userPipeline[i]})`;
+            const tracker = document.getElementById('live-step-tracker');
+            if (tracker) tracker.innerText = `Adım: ${i + 1}/${AppState.userPipeline.length} (${AppState.userPipeline[i]})`;
             UI.renderStacks(AppState.stackA, AppState.stackB);
             await new Promise(r => setTimeout(r, speed));
         }
@@ -308,7 +551,8 @@ function evaluateResult() {
     if (AppState.gameMode === 'practice') {
         UI.showToast("Tebrikler! Dizi sıralandı.", "success");
         setTimeout(() => {
-            const selVal = document.getElementById('practice-count-select').value;
+            const sel = document.getElementById('practice-count-select');
+            const selVal = sel ? sel.value : 5;
             loadPracticeLevel(selVal);
         }, 1200);
         return;
@@ -342,14 +586,16 @@ function nextCompLevel() {
 }
 
 function updateScoreUI() {
-    document.getElementById('score-indicator').innerText = AppState.score;
+    const scoreInd = document.getElementById('score-indicator');
+    if (scoreInd) scoreInd.innerText = AppState.score;
 }
 
 function startCompetitionTimer() {
     clearInterval(AppState.timerInterval);
     AppState.totalSeconds = 25 * 60;
     AppState.isPaused = false;
-    document.getElementById('pause-btn').innerText = "Durdur";
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) pauseBtn.innerText = "Durdur";
     updateTimerDisplay();
 
     AppState.timerInterval = setInterval(() => {
@@ -368,12 +614,14 @@ function startCompetitionTimer() {
 function updateTimerDisplay() {
     const m = Math.floor(AppState.totalSeconds / 60).toString().padStart(2, '0');
     const s = (AppState.totalSeconds % 60).toString().padStart(2, '0');
-    document.getElementById('timer-indicator').innerText = `${m}:${s}`;
+    const timerInd = document.getElementById('timer-indicator');
+    if (timerInd) timerInd.innerText = `${m}:${s}`;
 }
 
 function togglePauseComp() {
     AppState.isPaused = !AppState.isPaused;
-    document.getElementById('pause-btn').innerText = AppState.isPaused ? "Devam Et" : "Durdur";
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) pauseBtn.innerText = AppState.isPaused ? "Devam Et" : "Durdur";
     UI.showToast(AppState.isPaused ? "Yarışma duraklatıldı." : "Yarışma devam ediyor.", "warn");
 }
 
@@ -422,6 +670,7 @@ function saveScoreToLeaderboard(name, sc) {
 function openLeaderboardModal() {
     const list = JSON.parse(localStorage.getItem('ps_leaderboard') || '[]');
     const tbody = document.getElementById('leaderboard-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (list.length === 0) {
