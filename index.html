@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>42 Push_swap Master Trainer</title>
 
-    <!-- CSS Dosyaları (Sıralama Önemlidir) -->
+    <!-- CSS Dosyaları -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/responsive.css">
@@ -78,7 +78,7 @@
             <div class="mode-card" onclick="selectMode('evaluator')">
                 <div class="mode-icon">🧪</div>
                 <div class="mode-title">Evo & Checker Modu</div>
-                <div class="mode-desc">Kendi kodunu/çıktını test et; Linux, Mac ve Win checker testleri ile edge-case senaryolarında sınırları zorla.</div>
+                <div class="mode-desc">Linux, Mac, Win checker simülasyonu ve kod patlatma stres testleri.</div>
             </div>
         </div>
     </div>
@@ -134,14 +134,6 @@
                         <option value="15">15 Sayı</option>
                     </select>
                 </div>
-                <div id="eval-controller" class="cerat-config" style="display: none; gap: 8px;">
-                <span>Checker OS:</span>
-                        <button class="cerat-btn" id="btn-os-linux" onclick="setCheckerOS('linux')">🐧 Linux</button>
-                        <button class="cerat-btn" id="btn-os-mac" onclick="setCheckerOS('mac')">🍎 macOS</button>
-                        <button class="cerat-btn" id="btn-os-win" onclick="setCheckerOS('win')">🪟 Windows</button>
-                        <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()">💥 Kodu Patlatmayı Dene</button>
-                        <button class="cerat-btn" style="background:#0284c7; color:#fff;" onclick="loadCustomInputToEval()">📥 Özel Input Test Et</button>
-                </div>
 
                 <div id="cerat-controller" class="cerat-config" style="display: none;">
                     <button class="cerat-btn" onclick="promptCustomInput()">✏️ Sayı Gir</button>
@@ -150,6 +142,14 @@
                     <button class="cerat-btn" onclick="loadCeratRandom(1000)">1000</button>
                     <button class="cerat-btn" onclick="loadCeratRandom(1500)">1500</button>
                     <button class="cerat-btn" onclick="loadCeratRandom(2000)">2000</button>
+                </div>
+
+                <!-- EVO MODU KONTROLLERİ -->
+                <div id="eval-controller" class="cerat-config" style="display: none; gap: 6px;">
+                    <button class="cerat-btn active-os" id="btn-os-linux" onclick="setCheckerOS('linux')">🐧 Linux Checker</button>
+                    <button class="cerat-btn" id="btn-os-mac" onclick="setCheckerOS('mac')">🍎 macOS Checker</button>
+                    <button class="cerat-btn" id="btn-os-win" onclick="setCheckerOS('win')">🪟 Windows Checker</button>
+                    <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()">💥 Kodu Patlat</button>
                 </div>
 
                 <span id="live-step-tracker" style="color: var(--accent-blue);">Canlı Adım: Bekleniyor</span>
@@ -189,8 +189,8 @@
                         <button id="solve-cerat-btn" class="btn btn-pause" onclick="autoSolveCerat()" style="display: none; background:#2a3a5e; color:#00d2ff;">Oto-Çöz (Optimize)</button>
                         <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;">Durdur</button>
                         <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;">Yeniden Başlat</button>
+                        <button id="eval-paste-btn" class="btn btn-pause" onclick="evalRunPastedCommands()" style="display: none; background:#3b4261; color:#00d2ff;">Komutları Çalıştır</button>
                         <button class="btn btn-run" onclick="executeUserPipeline()">Simüle Et & Doğrula</button>
-                        <button id="eval-paste-btn" class="btn btn-pause" onclick="evalRunPastedCommands()" style="display: none; background:#3b4261; color:#00d2ff;">Komutları İşlet & Kontrol Et</button>
                     </div>
                 </div>
             </div>
@@ -226,8 +226,10 @@
         </div>
     </div>
 
+    <!-- Konfeti Canvas Alanı -->
     <canvas id="confetti-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:99999; display:none;"></canvas>
-    <!-- JS Yükleme Sıralaması (Bağımlılık Zinciri) -->
+
+    <!-- JS Yükleme Sıralaması -->
     <script src="js/config.js"></script>
     <script src="js/state.js"></script>
     <script src="js/engine.js"></script>

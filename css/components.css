@@ -466,3 +466,15 @@
 .toast-success { background: #00c853; color: #000; }
 .toast-warn { background: #ffd600; color: #000; }
 .toast-error { background: #ff1744; color: #fff; }
+
+/* --- 4. Mod: Evo / Checker Seçenekleri --- */
+.cerat-btn.active-os {
+    background: var(--accent-blue) !important;
+    color: #0b0f19 !important;
+    border-color: #ffffff !important;
+}
+
+[contenteditable="true"]:focus {
+    outline: 1px solid var(--accent-blue) !important;
+    background: rgba(0, 210, 255, 0.04);
+}

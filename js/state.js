@@ -14,5 +14,6 @@ const AppState = {
     timerInterval: null,
     isPaused: false,
     activeTab: 'c',
-    isFirstGuideSeen: false
+    isFirstGuideSeen: false,
+    checkerOS: 'linux'
 };

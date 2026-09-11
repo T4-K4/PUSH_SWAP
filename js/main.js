@@ -46,6 +46,15 @@ function switchTerminalTab(tab) {
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 }
 
+function setCheckerOS(os) {
+    AppState.checkerOS = os;
+    ['linux', 'mac', 'win'].forEach(k => {
+        const el = document.getElementById(`btn-os-${k}`);
+        if (el) el.classList.toggle('active-os', k === os);
+    });
+    UI.showToast(`Checker Sistemi: ${os.toUpperCase()} seçildi.`, "warn");
+}
+
 function selectMode(mode) {
     AppState.gameMode = mode;
     document.getElementById('mode-modal').style.display = 'none';
@@ -53,10 +62,15 @@ function selectMode(mode) {
     document.getElementById('home-btn').style.display = 'inline-flex';
     document.getElementById('practice-controller').style.display = (mode === 'practice') ? 'flex' : 'none';
     document.getElementById('cerat-controller').style.display = (mode === 'cerat') ? 'flex' : 'none';
+    document.getElementById('eval-controller').style.display = (mode === 'evaluator') ? 'flex' : 'none';
     document.getElementById('solve-cerat-btn').style.display = (mode === 'cerat') ? 'inline-flex' : 'none';
+    document.getElementById('eval-paste-btn').style.display = (mode === 'evaluator') ? 'inline-flex' : 'none';
     document.getElementById('timer-box').style.display = (mode === 'compete') ? 'flex' : 'none';
     document.getElementById('pause-btn').style.display = (mode === 'compete') ? 'inline-flex' : 'none';
     document.getElementById('restart-btn').style.display = (mode === 'compete') ? 'inline-flex' : 'none';
+
+    const term = document.getElementById('terminal-view');
+    term.contentEditable = "false";
 
     if (AppState.gameMode === 'compete') {
         document.getElementById('stage-mode-label').innerText = "Yarışma Modu (Aşamalı)";
@@ -79,6 +93,24 @@ function selectMode(mode) {
         AppState.score = 0;
         updateScoreUI();
         loadCeratRandom(500);
+    } else if (AppState.gameMode === 'evaluator') {
+        clearInterval(AppState.timerInterval);
+        document.getElementById('stage-mode-label').innerText = "Evo & 42 Checker Test Laboratuvarı";
+        document.getElementById('level-indicator').innerText = "Evo Test";
+        AppState.score = 0;
+        updateScoreUI();
+        setCheckerOS('linux');
+
+        AppState.initialStack = [2, 1, 3, 6, 5, 8];
+        AppState.stackA = [...AppState.initialStack];
+        AppState.stackB = [];
+        AppState.userPipeline = [];
+        UI.renderPipeline(AppState.userPipeline);
+        UI.renderStacks(AppState.stackA, AppState.stackB);
+
+        term.contentEditable = "true";
+        term.innerText = `// 42 CHECKER TERMINALI\n// Komutlarını buraya satır satır yapıştırabilirsin:\nsa\npb\npb\nsa\npa\npa`;
+        document.getElementById('live-step-tracker').innerText = "Komutları Yapıştır & Çalıştır";
     }
 }
 
@@ -177,6 +209,33 @@ function autoSolveCerat() {
     UI.showToast(`Optimize edildi: ${AppState.initialStack.length} eleman ${AppState.userPipeline.length} hamlede çözüldü!`, "success");
 }
 
+async function evalRunPastedCommands() {
+    const term = document.getElementById('terminal-view');
+    const rawText = term.innerText;
+    const lines = rawText.split('\n')
+        .map(x => x.trim().toLowerCase())
+        .filter(x => x && !x.startsWith('//') && !x.startsWith('#'));
+
+    const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
+    const invalidOps = lines.filter(op => !validOps.includes(op));
+
+    if (invalidOps.length > 0) {
+        alert(`42 ${AppState.checkerOS.toUpperCase()} Checker Sonucu:\nError\n(Geçersiz hamle: "${invalidOps[0]}")`);
+        return;
+    }
+
+    AppState.userPipeline = lines;
+    UI.renderPipeline(AppState.userPipeline);
+    await executeUserPipeline();
+
+    if (Engine.isSorted(AppState.stackA, AppState.stackB)) {
+        UI.triggerConfetti();
+        alert(`TEBRİKLER! [42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: OK\nDizi başarıyla sıralandı!`);
+    } else {
+        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: KO\nDizi sıralanmadı ya da B yığını boş değil!`);
+    }
+}
+
 function addCommandToPipeline(cmd) {
     if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
     AppState.userPipeline.push(cmd);
@@ -227,7 +286,9 @@ async function executeUserPipeline() {
     }
 
     AppState.isSimulating = false;
-    evaluateResult();
+    if (AppState.gameMode !== 'evaluator') {
+        evaluateResult();
+    }
 }
 
 function evaluateResult() {
@@ -328,7 +389,7 @@ function restartCompetition() {
 
 function finishCompetitionTime() {
     saveScoreToLeaderboard(AppState.playerName, AppState.score);
-    const retry = confirm(`SÜRE DOLDU!\nToplam Puanınız: ${AppState.score}\n\nAynı kullanıcı adıyla tekrar denemek istiyor musunuz?`);
+    confirm(`SÜRE DOLDU!\nToplam Puanınız: ${AppState.score}\n\nAynı kullanıcı adıyla tekrar denemek istiyor musunuz?`);
     AppState.score = 0;
     updateScoreUI();
     startCompetitionTimer();
