@@ -72,30 +72,127 @@ function setCheckerOS(os) {
     });
 }
 
-// OS Checker Butonuna Basıldığında Kişinin Algoritmasını Çalıştırıp Doğrular
-async function setAndRunChecker(os) {
-    setCheckerOS(os);
-    UI.showToast(`42 ${os.toUpperCase()} Checker devrede. Kod test ediliyor...`, "warn");
+// GITHUB REPOSUNU BACKEND'E GÖNDERİP GERÇEKTEN DERLEYEN FONKSİYON
+async function fetchGithubRepo() {
+    const input = document.getElementById('github-repo-input').value.trim();
+    if (!input) {
+        alert("Lütfen bir GitHub repo linki girin!\nÖrnek: https://github.com/kullanici/push_swap");
+        return;
+    }
 
-    // Kişinin C kodundan hamleleri türet
-    AppState.userPipeline = Solver.autoSolve(AppState.initialStack);
+    const term = document.getElementById('terminal-view');
+    if (term) {
+        term.innerText = `[LOG] Repo backend'e iletiliyor...\n[LOG] git clone ${input}\n[LOG] make koşturuluyor, lütfen bekleyin...`;
+    }
+    switchTerminalTab('c');
+    UI.showToast("Repo klonlanıyor ve 'make' ile derleniyor...", "warn");
+
+    try {
+        const res = await fetch(`http://localhost:3000/api/compile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repoUrl: input })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            if (term) {
+                term.innerText = `💥 HATA:\n${data.error}`;
+            }
+            alert(`Derleme Başarısız!\n\n${data.error}`);
+            return;
+        }
+
+        AppState.isCompiled = true;
+        if (term) {
+            term.innerText = `/* ====================================================\n` +
+                             `   REPO BAŞARIYLA DERLENDİ: push_swap hazır!\n` +
+                             `   ==================================================== */\n\n` +
+                             `[MAKE ÇIKTISI]:\n${data.makeOutput || "make: Nothing to be done."}`;
+        }
+
+        UI.showToast("Repo başarıyla derlendi! Artık 100/500 sayı koşturabilirsiniz.", "success");
+    } catch (err) {
+        alert("Backend Bağlantı Hatası!\nLütfen terminalde 'node server.js' çalıştığından emin olun.\nHata: " + err.message);
+    }
+}
+
+// 100 VE 500 SAYI BUTONU: GERÇEK BINARY'E ARGÜMAN VERİR
+async function loadEvalRandom(count) {
+    if (!AppState.isCompiled) {
+        alert("Lütfen önce üst bardan geçerli bir GitHub repo linki çekip derleyin!");
+        return;
+    }
+
+    AppState.isSimulating = false;
+    AppState.userPipeline = [];
     UI.renderPipeline(AppState.userPipeline);
 
+    const arr = Engine.generateHugeRandom(parseInt(count));
+    AppState.initialStack = [...arr];
+    AppState.stackA = [...AppState.initialStack];
+    AppState.stackB = [];
+
+    AppState.optimalSolutionLength = Solver.calculateTargetOps(parseInt(count));
+    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
+    document.getElementById('live-step-tracker').innerText = `./push_swap ${count} sayıyla koşturuluyor...`;
+
+    UI.renderStacks(AppState.stackA, AppState.stackB);
+    UI.showToast(`${count} rastgele sayı ./push_swap binary'sine gönderiliyor...`, "warn");
+
+    const result = await Solver.runPushSwapBinary(arr);
+
+    if (!result.success) {
+        alert(`Çalıştırma Hatası:\n${result.error}`);
+        document.getElementById('live-step-tracker').innerText = "Program Patladı!";
+        return;
+    }
+
+    AppState.userPipeline = result.ops;
+    UI.renderPipeline(AppState.userPipeline);
+    document.getElementById('live-step-tracker').innerText = `Üretilen Hamle: ${result.ops.length}`;
+
+    const term = document.getElementById('terminal-view');
+    if (term) {
+        term.innerText = `/* ./push_swap ÇIKTISI (${count} Sayı) */\n` +
+                         `Toplam Hamle: ${result.ops.length}\n\n` +
+                         result.ops.slice(0, 80).join('\n') +
+                         (result.ops.length > 80 ? `\n\n... ve ${result.ops.length - 80} komut daha` : '');
+    }
+
+    UI.showToast(`Başarılı! Binary çalıştı ve ${result.ops.length} gerçek komut üretti.`, "success");
+}
+
+// OS CHECKER: OLUŞAN ÇIKTIYI YIĞINLARDA OYNATIR
+async function setAndRunChecker(os) {
+    setCheckerOS(os);
+
+    if (!AppState.userPipeline || AppState.userPipeline.length === 0) {
+        alert("Henüz çalıştırılmış bir hamle listesi yok! Lütfen önce '100 Sayı' veya '500 Sayı' butonuna basın.");
+        return;
+    }
+
+    UI.showToast(`42 ${os.toUpperCase()} Checker devrede. Simüle ediliyor...`, "warn");
     await executeUserPipeline();
 
     const isSorted = Engine.isSorted(AppState.stackA, AppState.stackB);
     const moves = AppState.userPipeline.length;
-    const maxAllowed = Solver.calculateTargetOps(AppState.initialStack.length);
+    const n = AppState.initialStack.length;
 
-    if (isSorted) {
-        if (moves <= maxAllowed) {
-            UI.triggerConfetti();
-            alert(`[42 ${os.toUpperCase()} CHECKER DOĞRULAMASI]\n\nSonuç: OK\nHamle Sayısı: ${moves} (Barem Limiti: ${maxAllowed})\n\nTebrikler! Karşı tarafın kodu bu diziyi başarıyla sıraladı!`);
-        } else {
-            alert(`[42 ${os.toUpperCase()} CHECKER UYARISI]\n\nSonuç: OK (Ancak Barem Aşıldı)\nHamle Sayısı: ${moves} > Limit: ${maxAllowed}\n\nDizi sıralandı fakat 42 bareminin üzerinde kaldı!`);
-        }
+    if (!isSorted) {
+        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: KO\n\nProgramın ürettiği hamleler diziyi sıralayamadı!`);
+        return;
+    }
+
+    if (n === 100) {
+        const rating = Solver.rate100(moves);
+        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: OK\nHamle Sayısı: ${moves}\nBarem Puanı: ${rating.label}`);
+    } else if (n === 500) {
+        const rating = Solver.rate500(moves);
+        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: OK\nHamle Sayısı: ${moves}\nBarem Puanı: ${rating.label}`);
     } else {
-        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: KO\n\nDizi sıralanamadı veya Stack B boşaltılmadı!`);
+        alert(`[42 ${os.toUpperCase()} CHECKER]\n\nSonuç: OK\nHamle: ${moves}`);
     }
 }
 
@@ -105,7 +202,7 @@ function resetEvalMode() {
     AppState.stackB = [];
     AppState.userPipeline = [];
     AppState.lastTestReport = [];
-    AppState.loadedUserCode = "";
+    AppState.isCompiled = false;
     
     UI.renderPipeline(AppState.userPipeline);
     UI.renderStacks(AppState.stackA, AppState.stackB);
@@ -113,7 +210,7 @@ function resetEvalMode() {
     const term = document.getElementById('terminal-view');
     if (term) {
         term.contentEditable = "true";
-        term.innerText = `// 42 EVALUATOR & CHECKER MODU\n// GitHub repo linkini üstten çekin veya C kodunuzu buraya yapıştırın.`;
+        term.innerText = `// 42 GERÇEK C DERLEME & EVO TEST LABORATUVARI\n// Üst bardan GitHub repo linki girip 'Kodu Çek' butonuna basın.\n// Backend 'make' ile kodu gerçekten derleyecektir.`;
     }
     
     const gitInput = document.getElementById('github-repo-input');
@@ -123,32 +220,6 @@ function resetEvalMode() {
     document.getElementById('best-moves-count').innerText = "6";
     document.getElementById('live-step-tracker').innerText = "Hazır";
     UI.showToast("Evo modu sıfırlandı!", "success");
-}
-
-// 100 ve 500 Sayıyı Çekilen Kişinin C Koduyla Test Etme (C Kodu Silinmez!)
-function loadEvalRandom(count) {
-    AppState.isSimulating = false;
-    AppState.userPipeline = [];
-
-    // Rastgele diziyi oluştur
-    const arr = Engine.generateHugeRandom(parseInt(count));
-    AppState.initialStack = [...arr];
-    AppState.stackA = [...AppState.initialStack];
-    AppState.stackB = [];
-
-    AppState.optimalSolutionLength = Solver.calculateTargetOps(parseInt(count));
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
-    document.getElementById('live-step-tracker').innerText = `${count} Sayı Yüklendi`;
-
-    UI.renderStacks(AppState.stackA, AppState.stackB);
-
-    // Çekilen C kodunun algoritma profilini kullan (Terminaldeki C kodunu ASLA SİLME)
-    const generatedOps = Solver.autoSolve(AppState.initialStack);
-    AppState.userPipeline = generatedOps;
-    UI.renderPipeline(AppState.userPipeline);
-
-    const profile = Solver.parseUserCodeProfile(AppState.loadedUserCode);
-    UI.showToast(`${count} sayı oluşturuldu! (${profile.type.toUpperCase()} ile ${generatedOps.length} hamle üretildi)`, "success");
 }
 
 function selectMode(mode) {
@@ -196,7 +267,7 @@ function selectMode(mode) {
     } else if (AppState.gameMode === 'cerat') {
         clearInterval(AppState.timerInterval);
         const lbl = document.getElementById('stage-mode-label');
-        if (lbl) lbl.innerText = "Cerat Modu (Özel Dizi & Optimize Algoritma)";
+        if (lbl) lbl.innerText = "Cerat Modu (Özel Dizi & Test)";
         const ind = document.getElementById('level-indicator');
         if (ind) ind.innerText = "Cerat";
         AppState.score = 0;
@@ -205,7 +276,7 @@ function selectMode(mode) {
     } else if (AppState.gameMode === 'evaluator') {
         clearInterval(AppState.timerInterval);
         const lbl = document.getElementById('stage-mode-label');
-        if (lbl) lbl.innerText = "Evo & 42 Checker Test Laboratuvarı";
+        if (lbl) lbl.innerText = "42 Gerçek C Compiler & Evo Laboratuvarı";
         const ind = document.getElementById('level-indicator');
         if (ind) ind.innerText = "Evo Test";
         AppState.score = 0;
@@ -215,118 +286,8 @@ function selectMode(mode) {
     }
 }
 
-async function fetchGithubRepo() {
-    let input = document.getElementById('github-repo-input').value.trim();
-    if (!input) {
-        alert("Lütfen bir GitHub repo linki girin!\nÖrnek: https://github.com/kullanici/push_swap");
-        return;
-    }
-
-    if (input.includes('raw.githubusercontent.com')) {
-        try {
-            UI.showToast("Dosya indiriliyor...", "warn");
-            const res = await fetch(input);
-            if (!res.ok) throw new Error("Raw dosyaya ulaşılamadı.");
-            const code = await res.text();
-            handleLoadedCode(code, input);
-            return;
-        } catch (err) {
-            alert("Hata: " + err.message);
-            return;
-        }
-    }
-
-    input = input.replace(/^https?:\/\//, '').replace(/^www\./, '');
-    const parts = input.split('/').filter(Boolean);
-
-    if (parts.length < 2) {
-        alert("Geçersiz GitHub URL'si! Format: github.com/kullanici/repo");
-        return;
-    }
-
-    const owner = parts[1] === 'github.com' ? parts[2] : parts[1];
-    const repo = parts[1] === 'github.com' ? parts[3] : parts[2];
-
-    if (parts.includes('blob')) {
-        const blobIdx = parts.indexOf('blob');
-        const branch = parts[blobIdx + 1];
-        const filePath = parts.slice(blobIdx + 2).join('/');
-        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
-        try {
-            UI.showToast("Dosya çekiliyor...", "warn");
-            const res = await fetch(rawUrl);
-            if (!res.ok) throw new Error("Dosya çekilemedi.");
-            const code = await res.text();
-            handleLoadedCode(code, filePath);
-            return;
-        } catch (err) {
-            alert("Hata: " + err.message);
-            return;
-        }
-    }
-
-    UI.showToast("Repo taranıyor ve .c dosyaları aranıyor...", "warn");
-    try {
-        const repoInfoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-        if (!repoInfoRes.ok) throw new Error("Repo bulunamadı veya private (gizli)!");
-        const repoInfo = await repoInfoRes.json();
-        const defaultBranch = repoInfo.default_branch || 'main';
-
-        const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`);
-        if (!treeRes.ok) throw new Error("Dosya ağacı okunamadı.");
-        const treeData = await treeRes.json();
-
-        const cFiles = treeData.tree.filter(item => item.path.endsWith('.c'));
-        if (cFiles.length === 0) {
-            throw new Error("Bu repoda hiç .c dosyası bulunamadı!");
-        }
-
-        UI.showToast(`${cFiles.length} adet C dosyası birleştiriliyor...`, "warn");
-
-        cFiles.sort((a, b) => {
-            const aKey = a.path.includes('push_swap') || a.path.includes('main') || a.path.includes('sort') ? -1 : 1;
-            const bKey = b.path.includes('push_swap') || b.path.includes('main') || b.path.includes('sort') ? -1 : 1;
-            return aKey - bKey;
-        });
-
-        const filesToFetch = cFiles.slice(0, 6);
-        let combinedCode = "";
-
-        for (const file of filesToFetch) {
-            const rawFileUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/${file.path}`;
-            const fileRes = await fetch(rawFileUrl);
-            if (fileRes.ok) {
-                const text = await fileRes.text();
-                combinedCode += `/* DOSYA: ${file.path} */\n` + text + "\n\n";
-            }
-        }
-
-        handleLoadedCode(combinedCode, `${owner}/${repo}`);
-    } catch (err) {
-        alert("GitHub Tarama Hatası:\n" + err.message);
-    }
-}
-
-function handleLoadedCode(code, sourceName) {
-    AppState.loadedUserCode = code;
-    const profile = Solver.parseUserCodeProfile(code);
-
-    const term = document.getElementById('terminal-view');
-    if (term) {
-        // C kodunu terminale yaz ve koru
-        term.innerText = `/* ====================================================\n` +
-                         `   Geliştirici Reposu: ${sourceName}\n` +
-                         `   Algoritma Türü: ${profile.type.toUpperCase()}\n` +
-                         `   ==================================================== */\n\n` + code;
-        term.contentEditable = "true";
-    }
-    switchTerminalTab('c');
-
-    // Mevcut yığın için kişinin algoritmasıyla hamleleri anında türet
-    AppState.userPipeline = Solver.autoSolve(AppState.initialStack);
-    UI.renderPipeline(AppState.userPipeline);
-
-    UI.showToast(`Kodlar çekildi! Algoritma: ${profile.type.toUpperCase()}`, "success");
+async function evalRunPastedCommands() {
+    await setAndRunChecker(AppState.checkerOS);
 }
 
 function loadLevel(lvl) {
@@ -423,60 +384,6 @@ function promptCustomInput() {
     setCeratStack(parsed);
 }
 
-function autoSolveCerat() {
-    if (AppState.initialStack.length === 0) return;
-    AppState.userPipeline = Solver.autoSolve(AppState.initialStack);
-    UI.renderPipeline(AppState.userPipeline);
-    UI.renderTerminal(AppState.activeTab, AppState.initialStack);
-    UI.showToast(`Optimize edildi: ${AppState.initialStack.length} eleman ${AppState.userPipeline.length} hamlede çözüldü!`, "success");
-}
-
-async function evalRunPastedCommands() {
-    if (AppState.activeTab === 'report') {
-        switchTerminalTab('c');
-    }
-
-    const term = document.getElementById('terminal-view');
-    const rawText = term ? term.innerText : "";
-    const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
-
-    const lines = rawText.split('\n')
-        .map(x => x.trim().toLowerCase())
-        .filter(x => {
-            if (!x) return false;
-            if (x.startsWith('//') || x.startsWith('/*') || x.startsWith('*') || x.startsWith('#') || x.startsWith('[') || x.includes('dosya:')) return false;
-            return true;
-        });
-
-    const matchedOps = [];
-    for (const line of lines) {
-        if (validOps.includes(line)) {
-            matchedOps.push(line);
-        } else {
-            const found = line.match(/\b(sa|sb|ss|pa|pb|ra|rb|rr|rra|rrb|rrr)\b/g);
-            if (found) {
-                matchedOps.push(...found);
-            }
-        }
-    }
-
-    if (matchedOps.length === 0) {
-        alert("Çalıştırılacak push_swap hamlesi bulunamadı!");
-        return;
-    }
-
-    AppState.userPipeline = matchedOps;
-    UI.renderPipeline(AppState.userPipeline);
-    await executeUserPipeline();
-
-    if (Engine.isSorted(AppState.stackA, AppState.stackB)) {
-        UI.triggerConfetti();
-        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: OK\n\nDizi kusursuz sıralandı, Stack B tamamen boş!`);
-    } else {
-        alert(`[42 ${AppState.checkerOS.toUpperCase()} CHECKER]\nSonuç: KO\n\nDizi sıralı değil veya Stack B boşaltılmadı!`);
-    }
-}
-
 function addCommandToPipeline(cmd) {
     if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
     AppState.userPipeline.push(cmd);
@@ -543,11 +450,6 @@ function evaluateResult() {
         return;
     }
 
-    if (AppState.gameMode === 'cerat') {
-        UI.showToast(`Başarılı! ${AppState.initialStack.length} sayı ${steps} hamlede tamamlandı.`, "success");
-        return;
-    }
-
     if (AppState.gameMode === 'practice') {
         UI.showToast("Tebrikler! Dizi sıralandı.", "success");
         setTimeout(() => {
@@ -571,7 +473,7 @@ function evaluateResult() {
     } else {
         AppState.score += 50;
         updateScoreUI();
-        UI.showToast(`Sıralandı ancak hedeften (${AppState.optimalSolutionLength}) uzun sürdü! (+50 Puan)`, "warn");
+        UI.showToast(`Sıralandı ancak hedeften uzun sürdü! (+50 Puan)`, "warn");
     }
 }
 
