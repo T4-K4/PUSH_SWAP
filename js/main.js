@@ -1,4 +1,28 @@
-const BACKEND_URL = "https://push-swap-mw5i.onrender.com/api";
+// UI.toggleModal yoksa doğrudan güvenli kapatma fonksiyonu:
+function closeInitialGuide() {
+    const guide = document.getElementById('guide-modal');
+    if (guide) {
+        guide.style.display = 'none';
+        guide.classList.add('hidden');
+    }
+    
+    if (typeof UI !== 'undefined' && typeof UI.toggleModal === 'function') {
+        UI.toggleModal('guide-modal', false);
+    }
+
+    if (!AppState.isFirstGuideSeen) {
+        AppState.isFirstGuideSeen = true;
+        const loginModal = document.getElementById('login-modal');
+        if (loginModal) {
+            loginModal.style.display = 'flex';
+            loginModal.classList.remove('hidden');
+        }
+        const loginInput = document.getElementById('login-input-field');
+        if (loginInput) setTimeout(() => loginInput.focus(), 100);
+    }
+}
+
+window.closeInitialGuide = closeInitialGuide;
 
 function initApp() {
     UI.renderCommandsPanel();
