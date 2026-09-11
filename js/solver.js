@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:3000/api";
+const BACKEND_URL = "https://push-swap-mw5i.onrender.com/api";
 
 const Solver = {
     rate100(moves) {
@@ -49,7 +49,7 @@ const Solver = {
         } catch (err) {
             return {
                 success: false,
-                error: `Backend servisine ulaşılamadı! Lütfen terminalde "node server.js" çalıştırdığınızdan emin olun.`
+                error: `Bulut servisine ulaşılamadı! Render uykuda olabilir (ilk açılış 30-40 sn sürebilir), lütfen biraz bekleyip tekrar deneyin.`
             };
         }
     }

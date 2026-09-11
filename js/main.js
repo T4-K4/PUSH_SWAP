@@ -1,3 +1,5 @@
+const BACKEND_URL = "https://push-swap-mw5i.onrender.com/api";
+
 function initApp() {
     UI.renderCommandsPanel();
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
@@ -72,7 +74,7 @@ function setCheckerOS(os) {
     });
 }
 
-// GITHUB REPOSUNU BACKEND'E GÖNDERİP GERÇEKTEN DERLEYEN FONKSİYON
+// GITHUB REPOSUNU BACKEND'E GÖNDERİP GERÇEKTEN DERLEYEN FONKSİYON (RENDER ENTEGRASYONLU)
 async function fetchGithubRepo() {
     const input = document.getElementById('github-repo-input').value.trim();
     if (!input) {
@@ -82,13 +84,13 @@ async function fetchGithubRepo() {
 
     const term = document.getElementById('terminal-view');
     if (term) {
-        term.innerText = `[LOG] Repo backend'e iletiliyor...\n[LOG] git clone ${input}\n[LOG] make koşturuluyor, lütfen bekleyin...`;
+        term.innerText = `[LOG] Bulut derleyicisine bağlanılıyor (https://push-swap-mw5i.onrender.com)...\n[LOG] git clone ${input}\n[LOG] make ve GCC koşturuluyor, lütfen bekleyin (İlk açılışta sunucunun uyanması 30 sn sürebilir)...`;
     }
     switchTerminalTab('c');
-    UI.showToast("Repo klonlanıyor ve 'make' ile derleniyor...", "warn");
+    UI.showToast("Repo klonlanıyor ve izole ortamda derleniyor...", "warn");
 
     try {
-        const res = await fetch(`http://localhost:3000/api/compile`, {
+        const res = await fetch(`${BACKEND_URL}/compile`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ repoUrl: input })
@@ -109,12 +111,12 @@ async function fetchGithubRepo() {
             term.innerText = `/* ====================================================\n` +
                              `   REPO BAŞARIYLA DERLENDİ: push_swap hazır!\n` +
                              `   ==================================================== */\n\n` +
-                             `[MAKE ÇIKTISI]:\n${data.makeOutput || "make: Nothing to be done."}`;
+                             `[DERLEME ÇIKTISI]:\n${data.makeOutput || data.message || "Başarıyla derlendi."}`;
         }
 
         UI.showToast("Repo başarıyla derlendi! Artık 100/500 sayı koşturabilirsiniz.", "success");
     } catch (err) {
-        alert("Backend Bağlantı Hatası!\nLütfen terminalde 'node server.js' çalıştığından emin olun.\nHata: " + err.message);
+        alert("Backend Bağlantı Hatası!\nRender sunucusu uykuda olabilir veya ağ bağlantısı koptu.\nLütfen 20-30 saniye bekleyip tekrar deneyin.\nHata: " + err.message);
     }
 }
 
@@ -210,7 +212,7 @@ function resetEvalMode() {
     const term = document.getElementById('terminal-view');
     if (term) {
         term.contentEditable = "true";
-        term.innerText = `// 42 GERÇEK C DERLEME & EVO TEST LABORATUVARI\n// Üst bardan GitHub repo linki girip 'Kodu Çek' butonuna basın.\n// Backend 'make' ile kodu gerçekten derleyecektir.`;
+        term.innerText = `// 42 GERÇEK C DERLEME & EVO TEST LABORATUVARI\n// Üst bardan GitHub repo linki girip 'Kodu Çek' butonuna basın.\n// Backend 'make' ve GCC ile kodu doğrudan bulutta derleyecektir.`;
     }
     
     const gitInput = document.getElementById('github-repo-input');

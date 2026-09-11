@@ -7,7 +7,6 @@ const os = require('os');
 const PORT = process.env.PORT || 3000;
 let currentRepoDir = null;
 
-// CORS Başlıkları
 const setCorsHeaders = (res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -62,44 +61,52 @@ const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', chunk => {
         body += chunk;
-        // Body boyutu 2MB'ı aşarsa bağlantıyı kes (Payload DoS koruması)
         if (body.length > 2 * 1024 * 1024) {
             req.destroy();
         }
     });
 
     req.on('end', () => {
-        let parsed = {};
+        const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+
+        let parsedBody = {};
         if (body) {
-            try { parsed = JSON.parse(body); } catch (e) {}
+            try { parsedBody = JSON.parse(body); } catch (e) {}
         }
 
-        // 1. DERLEME ENDPOINT'I
-        if (req.url === '/api/compile' && req.method === 'POST') {
-            let { repoUrl } = parsed;
-            if (!repoUrl) return sendJson(res, 400, { success: false, error: 'Repo linki boş!' });
+        // 0. HEALTH CHECK (Tarayıcıdan girildiğinde 404 vermez)
+        if (pathname === '/' && req.method === 'GET') {
+            return sendJson(res, 200, {
+                status: "OK",
+                message: "42 Push_swap Derleme & Test Motoru Aktif!"
+            });
+        }
 
-            // Sadece meşru git/github bağlantılarına izin ver (SSRF ve URL Injection koruması)
+        // 1. DERLEME ENDPOINT'I (/api/compile)
+        if (pathname === '/api/compile' && req.method === 'POST') {
+            let { repoUrl } = parsedBody;
+            if (!repoUrl) return sendJson(res, 400, { success: false, error: 'Repo linki boş olamaz!' });
+
             const cleanUrl = repoUrl.trim();
             if (!/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(?:\.git)?$/.test(cleanUrl)) {
-                return sendJson(res, 400, { success: false, error: 'Geçersiz format! Sadece geçerli GitHub repository bağlantıları kabul edilir.' });
+                return sendJson(res, 400, { success: false, error: 'Geçersiz bağlantı! Sadece genel GitHub repo linki girin.' });
             }
 
             const tempDir = path.join(os.tmpdir(), `ps_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
             fs.mkdirSync(tempDir, { recursive: true });
 
-            console.log(`[+] İzole klon başlatılıyor: ${cleanUrl}`);
+            console.log(`[+] Repo klonlanıyor: ${cleanUrl}`);
 
-            // Klonlama komutu
             const cloneCmd = `git clone --depth 1 --recurse-submodules --shallow-submodules "${cleanUrl}" .`;
 
-            exec(cloneCmd, { cwd: tempDir, timeout: 35000 }, (cloneErr) => {
+            exec(cloneCmd, { cwd: tempDir, timeout: 45000 }, (cloneErr) => {
                 if (cloneErr) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: `Git Klonlama Başarısız (Gizli repo veya hatalı link): ${cloneErr.message}` });
+                    return sendJson(res, 400, { success: false, error: `Git Klonlama Hatası (Repo gizli veya geçersiz): ${cloneErr.message}` });
                 }
 
-                // Dizin alias'ları
+                // Linux harf duyarlılığı için alias oluştur
                 try {
                     const entries = fs.readdirSync(tempDir, { withFileTypes: true });
                     entries.filter(e => e.isDirectory()).forEach(d => {
@@ -121,7 +128,7 @@ const server = http.createServer((req, res) => {
 
                 if (cFiles.length === 0) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: 'Bu repoda hiç .c dosyası bulunamadı!' });
+                    return sendJson(res, 400, { success: false, error: 'Repoda derlenecek hiçbir .c dosyası bulunamadı!' });
                 }
 
                 const includeFlags = dirs.map(d => `-I"${d}"`).join(' ');
@@ -130,16 +137,13 @@ const server = http.createServer((req, res) => {
                 const nonMains = [];
 
                 cFiles.forEach(file => {
-                    if (hasMain(file)) {
-                        mains.push(file);
-                    } else {
-                        nonMains.push(file);
-                    }
+                    if (hasMain(file)) mains.push(file);
+                    else nonMains.push(file);
                 });
 
                 if (mains.length === 0) {
                     fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: "Geçersiz Kod: Projede 'main' fonksiyonu bulunamadı!" });
+                    return sendJson(res, 400, { success: false, error: "Geçersiz Kod: Repoda 'main' fonksiyonu bulunamadı!" });
                 }
 
                 let chosenMain = mains.find(f => {
@@ -150,7 +154,6 @@ const server = http.createServer((req, res) => {
                 const unusedMains = mains.filter(f => f !== chosenMain).map(f => path.relative(tempDir, f));
                 const compileTargets = [chosenMain, ...nonMains];
 
-                // GCC Derleme: -w ile uyarıları yut, binary'yi üret
                 const gccCmd = `gcc -w ${includeFlags} ${compileTargets.map(f => `"${f}"`).join(' ')} -o push_swap`;
 
                 console.log(`[+] GCC ile derleniyor...`);
@@ -166,13 +169,12 @@ const server = http.createServer((req, res) => {
                         });
                     }
 
-                    // Sadece çalıştırma izni ver, yazma izinlerini kısıtla
                     try { fs.chmodSync(binaryPath, 0o755); } catch (e) {}
 
-                    // SANDBOX DOĞRULAMA: ulimit ile fork-bomb ve bellek koruması
-                    const testCmd = `ulimit -u 30 -v 200000; ./push_swap 2 1 3`;
+                    // Test çalıştırması (Doğrulama)
+                    const testCmd = `ulimit -u 30 -v 300000; ./push_swap 2 1 3`;
 
-                    exec(testCmd, { cwd: tempDir, timeout: 4000 }, (runErr, runStdout) => {
+                    exec(testCmd, { cwd: tempDir, timeout: 5000 }, (runErr, runStdout) => {
                         const validOps = ['sa', 'sb', 'ss', 'pa', 'pb', 'ra', 'rb', 'rr', 'rra', 'rrb', 'rrr'];
                         const lines = (runStdout || '').split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
 
@@ -182,7 +184,7 @@ const server = http.createServer((req, res) => {
                             fs.rmSync(tempDir, { recursive: true, force: true });
                             return sendJson(res, 400, {
                                 success: false,
-                                error: `Geçersiz Program: Kod derlendi ancak 42 standart push_swap komutları yerine tanımsız çıktılar üretiyor!\nÇıktı: ${runStdout.slice(0, 80)}`
+                                error: `Geçersiz Program: Kod derlendi ancak 42 standart push_swap komutları yerine tanımsız çıktılar basıyor!\nÇıktı: ${runStdout.slice(0, 80)}`
                             });
                         }
 
@@ -196,10 +198,10 @@ const server = http.createServer((req, res) => {
                             note = `\n\n[UYARI] Derlemeye dahil edilmeyen ikincil main/bonus dosyaları:\n-> ` + unusedMains.join('\n-> ');
                         }
 
-                        console.log(`[+] Derleme & Sandbox onayı tamam.`);
+                        console.log(`[+] push_swap hazır.`);
                         return sendJson(res, 200, {
                             success: true,
-                            message: 'Kod başarıyla derlendi ve sandbox testinden geçti!' + note
+                            message: 'Kod başarıyla derlendi ve doğrulandı!' + note
                         });
                     });
                 });
@@ -207,15 +209,14 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        // 2. ÇALIŞTIRMA ENDPOINT'I (ULIMIT & BUFFER KORUMALI)
-        if (req.url === '/api/run' && req.method === 'POST') {
-            const { args } = parsed;
+        // 2. ÇALIŞTIRMA ENDPOINT'I (/api/run)
+        if (pathname === '/api/run' && req.method === 'POST') {
+            const { args } = parsedBody;
 
             if (!currentRepoDir || !fs.existsSync(path.join(currentRepoDir, 'push_swap'))) {
-                return sendJson(res, 400, { success: false, error: 'Aktif push_swap binary bulunamadı!' });
+                return sendJson(res, 400, { success: false, error: 'Aktif push_swap bulunamadı! Önce repo bağlantısını girip derleyin.' });
             }
 
-            // Gelen argümanları temizle (Komut enjeksiyonunu engellemek için sadece tamsayı ve boşluk kabul et)
             let safeArgs = "";
             if (Array.isArray(args)) {
                 safeArgs = args.filter(x => /^-?\d+$/.test(String(x).trim())).join(' ');
@@ -223,24 +224,22 @@ const server = http.createServer((req, res) => {
                 safeArgs = args.split(/\s+/).filter(x => /^-?\d+$/.test(x.trim())).join(' ');
             }
 
-            // Güvenli çalıştırma: Maksimum 30 proses/thread, 300MB sanal bellek, maksimum 5 saniye
-            const cmd = `ulimit -u 30 -v 300000; ./push_swap ${safeArgs}`;
+            const cmd = `ulimit -u 30 -v 350000; ./push_swap ${safeArgs}`;
 
-            exec(cmd, { cwd: currentRepoDir, timeout: 6000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+            exec(cmd, { cwd: currentRepoDir, timeout: 7000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
                 if (err) {
                     if (err.killed) {
-                        return sendJson(res, 400, { success: false, error: 'TIMEOUT (Zaman Aşımı): Algoritma 5 saniye içinde sonlanmadı (Olası sonsuz döngü)!' });
+                        return sendJson(res, 400, { success: false, error: 'TIMEOUT: Algoritma 7 saniyede bitmedi (Sonsuz Döngü)!' });
                     }
-                    return sendJson(res, 400, { success: false, error: `Çalışma Zamanı Hatası (Segfault/Memory Limit):\n${stderr || err.message}` });
+                    return sendJson(res, 400, { success: false, error: `Çalışma Hatası (Segfault/Memory Limit):\n${stderr || err.message}` });
                 }
 
                 const lines = stdout.split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
 
-                // Bellek patlatma koruması (20.000 satırdan fazla çıktı basan kodları durdur)
                 if (lines.length > 20000) {
                     return sendJson(res, 400, {
                         success: false,
-                        error: `Barem Aşımı & Buffer Sınırı: Program ${lines.length} satır hamle bastı! 42 baremlerine göre bu kod elenmiştir.`
+                        error: `Barem Aşımı: Program ${lines.length} satır hamle bastı! 42 baremlerine göre elendi.`
                     });
                 }
 
@@ -283,7 +282,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`====================================================`);
-    console.log(`  Zırhlı Push_swap Servisi Aktif! (Port: ${PORT})`);
-    console.log(`====================================================`);
+    console.log(`[+] Push_swap Servisi Aktif! (Port: ${PORT})`);
 });
