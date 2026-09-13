@@ -1,5 +1,5 @@
 // Backend & API Yapılandırması
-const BACKEND_URL = "https://push-swap-mw5i.onrender.com/api";
+const BACKEND_URL = "https://push-swap-mw5i.onrender.com";
 
 // Firebase Firestore REST Yapılandırması
 const FIREBASE_CONFIG = {
