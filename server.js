@@ -309,3 +309,167 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
     console.log(`[+] Push_swap Servisi Aktif! (Port: ${PORT})`);
 });
+
+// server.js içine eklenecek/güncellenecek bloklar
+
+const FIREBASE_PROJECT_ID = "push-swap-trainer-42";
+const activeSessions = new Map(); // sessionId -> { startTime, levels: [], currentLevel, cadetName, campus }
+
+// Simülasyon Motoru (Backend Tarafı Doğrulama)
+function applyOpBackend(op, a, b) {
+    if (op === 'sa') { if (a.length > 1) [a[0], a[1]] = [a[1], a[0]]; }
+    else if (op === 'sb') { if (b.length > 1) [b[0], b[1]] = [b[1], b[0]]; }
+    else if (op === 'ss') { applyOpBackend('sa', a, b); applyOpBackend('sb', a, b); }
+    else if (op === 'pa') { if (b.length > 0) a.unshift(b.shift()); }
+    else if (op === 'pb') { if (a.length > 0) b.unshift(a.shift()); }
+    else if (op === 'ra') { if (a.length > 1) a.push(a.shift()); }
+    else if (op === 'rb') { if (b.length > 1) b.push(b.shift()); }
+    else if (op === 'rr') { applyOpBackend('ra', a, b); applyOpBackend('rb', a, b); }
+    else if (op === 'rra') { if (a.length > 1) a.unshift(a.pop()); }
+    else if (op === 'rrb') { if (b.length > 1) b.unshift(b.pop()); }
+    else if (op === 'rrr') { applyOpBackend('rra', a, b); applyOpBackend('rrb', a, b); }
+}
+
+function isSortedBackend(a, b) {
+    if (!b || b.length !== 0) return false;
+    for (let i = 0; i < a.length - 1; i++) {
+        if (a[i] > a[i + 1]) return false;
+    }
+    return true;
+}
+
+function calculateTargetOpsBackend(count) {
+    if (count <= 3) return 3;
+    if (count <= 5) return 12;
+    if (count <= 15) return Math.max(14, Math.floor(count * 5.8));
+    return Math.floor(count * 9.5);
+}
+
+// REST handler içine eklenecek yeni endpoint'ler:
+
+// 1. OTURUM BAŞLATMA: /api/start-session
+if (pathname === '/api/start-session' && req.method === 'POST') {
+    const { name, campus } = parsedBody;
+    const validNickRegex = /^[a-zA-Z0-9_-]{2,12}$/;
+    if (!name || !validNickRegex.test(name)) {
+        return sendJson(res, 400, { success: false, error: 'Geçersiz nick formatı!' });
+    }
+
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+    // 13 seviyenin rastgele sayılarını sunucu belirler
+    const generatedLevels = [];
+    for (let lvl = 1; lvl <= 13; lvl++) {
+        const count = lvl + 2;
+        const set = new Set();
+        while (set.size < count) {
+            set.add(Math.floor(Math.random() * 85) + 10);
+        }
+        const arr = Array.from(set);
+        if (arr.every((v, i) => i === 0 || arr[i - 1] <= v)) {
+            [arr[0], arr[1]] = [arr[1], arr[0]];
+        }
+        generatedLevels.push({
+            level: lvl,
+            count: count,
+            numbers: arr,
+            targetOps: calculateTargetOpsBackend(count)
+        });
+    }
+
+    activeSessions.set(sessionId, {
+        name,
+        campus: campus || "42 Istanbul",
+        startTime: Date.now(),
+        levels: generatedLevels
+    });
+
+    return sendJson(res, 200, {
+        success: true,
+        sessionId,
+        levels: generatedLevels
+    });
+}
+
+// 2. SKOR VE HAMLE DOĞRULAMA: /api/verify-and-submit
+if (pathname === '/api/verify-and-submit' && req.method === 'POST') {
+    const { sessionId, solutions } = parsedBody; // solutions: [{ level: 1, ops: [...] }, ...]
+
+    if (!sessionId || !activeSessions.has(sessionId)) {
+        return sendJson(res, 403, { success: false, error: 'Geçersiz veya süresi dolmuş oturum!' });
+    }
+
+    const session = activeSessions.get(sessionId);
+    const elapsedSeconds = (Date.now() - session.startTime) / 1000;
+
+    // Süre anomalisi kontrolü: 13 seviyeyi 20 saniyeden kısa sürede bitiremez
+    if (elapsedSeconds < 20) {
+        activeSessions.delete(sessionId);
+        return sendJson(res, 400, { success: false, error: 'Hile Algılandı: İmkansız tamamlama süresi!' });
+    }
+
+    let calculatedScore = 0;
+    let verifiedCount = 0;
+
+    for (const sol of solutions) {
+        const serverLevel = session.levels.find(l => l.level === sol.level);
+        if (!serverLevel) continue;
+
+        const testA = [...serverLevel.numbers];
+        const testB = [];
+
+        // Hamleleri sunucuda işlet
+        for (const op of sol.ops) {
+            applyOpBackend(op, testA, testB);
+        }
+
+        // Sıralama doğrulaması
+        if (isSortedBackend(testA, testB)) {
+            const steps = sol.ops.length;
+            if (steps < serverLevel.targetOps) {
+                calculatedScore += 200;
+            } else if (steps === serverLevel.targetOps) {
+                calculatedScore += 100;
+            } else {
+                calculatedScore += 50;
+            }
+            verifiedCount++;
+        }
+    }
+
+    // Oturumu hafızadan kaldır (tekrar kullanılmasın)
+    activeSessions.delete(sessionId);
+
+    // Firebase Firestore REST API'ye sunucu tarafından güvenli kayıt
+    try {
+        const documentId = `${session.name.toLowerCase()}_${session.campus.replace(/\s+/g, '').toLowerCase()}`;
+        const firebaseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/leaderboard/${documentId}`;
+
+        const payload = {
+            fields: {
+                name: { stringValue: session.name },
+                campus: { stringValue: session.campus },
+                score: { integerValue: String(calculatedScore) },
+                date: { stringValue: new Date().toLocaleDateString('tr-TR') }
+            }
+        };
+
+        const fbRes = await fetch(firebaseUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!fbRes.ok) {
+            console.error("Firebase yazma hatası:", await fbRes.text());
+        }
+    } catch (fbErr) {
+        console.error("Firebase erişim hatası:", fbErr.message);
+    }
+
+    return sendJson(res, 200, {
+        success: true,
+        verifiedLevels: verifiedCount,
+        finalScore: calculatedScore
+    });
+}

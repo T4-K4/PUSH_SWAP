@@ -121,7 +121,7 @@ function selectMode(mode) {
         updateHintsUI();
         updateScoreUI();
         startCompetitionTimer();
-        loadLevel(AppState.currentLevel);
+        startCompetitionSession(); // Sunucu oturumunu başlatır
     } else if (AppState.gameMode === 'practice') {
         clearInterval(AppState.timerInterval);
         const lbl = document.getElementById('stage-mode-label');
@@ -166,6 +166,54 @@ function handleHomeNavigation() {
     }
 }
 
+// --- SUNUCU DOĞRULAMALI YARIŞMA OTURUMU ---
+async function startCompetitionSession() {
+    UI.showToast(AppState.currentLang === 'tr' ? "Yarışma sunucusuna bağlanılıyor..." : "Connecting to server...", "warn");
+    try {
+        const res = await fetch(`${BACKEND_URL}/start-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: AppState.playerName, campus: AppState.playerCampus })
+        });
+        const data = await res.json();
+        if (data.success) {
+            AppState.sessionId = data.sessionId;
+            AppState.serverLevels = data.levels;
+            AppState.completedSolutions = [];
+            loadServerLevel(1);
+        } else {
+            alert(`Hata: ${data.error}`);
+        }
+    } catch (e) {
+        alert("Yarışma sunucusuna ulaşılamadı! Render uyanıyor olabilir.");
+    }
+}
+
+function loadServerLevel(lvl) {
+    AppState.isSimulating = false;
+    AppState.userPipeline = [];
+    UI.renderPipeline(AppState.userPipeline);
+
+    const lvlData = AppState.serverLevels.find(l => l.level === lvl);
+    if (!lvlData) return;
+
+    AppState.currentLevel = lvl;
+    AppState.initialStack = [...lvlData.numbers];
+    AppState.stackA = [...lvlData.numbers];
+    AppState.stackB = [];
+    AppState.optimalSolutionLength = lvlData.targetOps;
+
+    const ind = document.getElementById('level-indicator');
+    if (ind) ind.innerText = `${lvl} / ${AppState.maxLevel}`;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Canlı Adım: Hazır" : "Live Step: Ready";
+
+    UI.renderStacks(AppState.stackA, AppState.stackB);
+    UI.renderTerminal(AppState.activeTab, AppState.initialStack);
+}
+
 // --- İPUCU (HINT) MEKANİĞİ ---
 function updateHintsUI() {
     const hintInd = document.getElementById('hint-indicator');
@@ -190,7 +238,6 @@ function useHint() {
     }
     if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
 
-    // Mevcut pipeline komutlarını klon yığınlarda işletip anlık durumu hesapla
     const simA = [...AppState.initialStack];
     const simB = [];
     AppState.userPipeline.forEach(op => Engine.applyOp(op, simA, simB));
@@ -214,48 +261,6 @@ function useHint() {
 }
 
 // --- SEVİYE & YARIŞMA AKIŞI ---
-function loadLevel(lvl) {
-    AppState.isSimulating = false;
-    AppState.userPipeline = [];
-    UI.renderPipeline(AppState.userPipeline);
-
-    const count = lvl + 2;
-    AppState.initialStack = Engine.generateRandomArray(count);
-    AppState.stackA = [...AppState.initialStack];
-    AppState.stackB = [];
-
-    AppState.optimalSolutionLength = Solver.calculateTargetOps(count);
-
-    const ind = document.getElementById('level-indicator');
-    if (ind) ind.innerText = `${lvl} / ${AppState.maxLevel}`;
-    const best = document.getElementById('best-moves-count');
-    if (best) best.innerText = AppState.optimalSolutionLength;
-    const tracker = document.getElementById('live-step-tracker');
-    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Canlı Adım: Bekleniyor" : "Live Step: Ready";
-
-    UI.renderStacks(AppState.stackA, AppState.stackB);
-    UI.renderTerminal(AppState.activeTab, AppState.initialStack);
-}
-
-function nextCompLevel() {
-    if (AppState.currentLevel < AppState.maxLevel) {
-        AppState.currentLevel++;
-
-        // Seviye 7, 9, 11 ve 13'te bonus ipucu hakkı
-        if ([7, 9, 11, 13].includes(AppState.currentLevel)) {
-            AppState.hintsLeft++;
-            updateHintsUI();
-            UI.showToast(I18N[AppState.currentLang].toast_bonus_hint, "success");
-        }
-
-        setTimeout(() => loadLevel(AppState.currentLevel), 1200);
-    } else {
-        saveScoreToFirebase(AppState.playerName, AppState.playerCampus, AppState.score);
-        UI.triggerConfetti();
-        alert(`🎉 TEBRİKLER! 13 seviyenin tamamını başarıyla bitirdiniz!\nToplam Skor: ${AppState.score}`);
-    }
-}
-
 function evaluateResult() {
     const isSorted = Engine.isSorted(AppState.stackA, AppState.stackB);
     const steps = AppState.userPipeline.length;
@@ -275,21 +280,65 @@ function evaluateResult() {
         return;
     }
 
+    // Geçici istemci puanı gösterimi
     if (steps < AppState.optimalSolutionLength) {
         AppState.score += 200;
-        updateScoreUI();
         UI.showToast(`Efsanevi! Hedefin altında tamamladın. +200 Puan!`, "success");
-        nextCompLevel();
     } else if (steps === AppState.optimalSolutionLength) {
         AppState.score += 100;
-        updateScoreUI();
         UI.showToast(`Kusursuz! İdeal çözüm. +100 Puan!`, "success");
-        nextCompLevel();
     } else {
         AppState.score += 50;
-        updateScoreUI();
         UI.showToast(`Sıralandı ancak hedeften uzun sürdü (+50 Puan)`, "warn");
-        nextCompLevel();
+    }
+    updateScoreUI();
+
+    // Bu seviyenin çözümünü listeye kaydet
+    AppState.completedSolutions.push({
+        level: AppState.currentLevel,
+        ops: [...AppState.userPipeline]
+    });
+
+    if (AppState.currentLevel < AppState.maxLevel) {
+        AppState.currentLevel++;
+
+        // Bonus ipucu kontrolleri
+        if ([7, 9, 11, 13].includes(AppState.currentLevel)) {
+            AppState.hintsLeft++;
+            updateHintsUI();
+            UI.showToast(I18N[AppState.currentLang].toast_bonus_hint, "success");
+        }
+
+        setTimeout(() => loadServerLevel(AppState.currentLevel), 1200);
+    } else {
+        clearInterval(AppState.timerInterval);
+        submitFinalSolutionsToBackend();
+    }
+}
+
+async function submitFinalSolutionsToBackend() {
+    UI.showToast(AppState.currentLang === 'tr' ? "Skorunuz sunucuda doğrulanıyor..." : "Verifying score on server...", "warn");
+    try {
+        const res = await fetch(`${BACKEND_URL}/verify-and-submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: AppState.sessionId,
+                solutions: AppState.completedSolutions
+            })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            AppState.score = data.finalScore;
+            updateScoreUI();
+            UI.triggerConfetti();
+            alert(`🎉 TEBRİKLER! Sunucu Onaylı Resmi Skorunuz: ${data.finalScore}\n(Doğrulanan Seviye: ${data.verifiedLevels}/13)`);
+        } else {
+            alert(`Doğrulama Başarısız: ${data.error}`);
+        }
+    } catch (e) {
+        alert("Doğrulama sunucusuna bağlanılamadı!");
     }
 }
 
@@ -341,21 +390,13 @@ function restartCompetition() {
         updateHintsUI();
         updateScoreUI();
         startCompetitionTimer();
-        AppState.currentLevel = 1;
-        loadLevel(AppState.currentLevel);
+        startCompetitionSession();
     }
 }
 
 function finishCompetitionTime() {
-    saveScoreToFirebase(AppState.playerName, AppState.playerCampus, AppState.score);
-    alert(`SÜRE DOLDU!\nToplam Puanınız: ${AppState.score}`);
-    AppState.score = 0;
-    AppState.hintsLeft = 3;
-    updateHintsUI();
-    updateScoreUI();
-    startCompetitionTimer();
-    AppState.currentLevel = 1;
-    loadLevel(AppState.currentLevel);
+    alert(`SÜRE DOLDU!\nTamamlanan seviyeler sunucuya gönderiliyor...`);
+    submitFinalSolutionsToBackend();
 }
 
 // --- SERBEST VE CERAT MODU KONTROLLERİ ---
@@ -527,7 +568,6 @@ async function fetchGithubRepo() {
     }
 }
 
-// ZIP Dosyasını Base64 Olarak Backend'e Gönderme
 function handleZipFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -799,48 +839,7 @@ async function runEvoStressTest() {
     }
 }
 
-// --- ONLINE FIREBASE LİDERLİK TABLOSU ---
-async function saveScoreToFirebase(name, campus, score) {
-    // Yerel önbelleğe yaz
-    let localList = JSON.parse(localStorage.getItem('ps_leaderboard') || '[]');
-    const existing = localList.find(x => x.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-        if (score > existing.score) {
-            existing.score = score;
-            existing.campus = campus;
-            existing.date = new Date().toLocaleDateString('tr-TR');
-        }
-    } else {
-        localList.push({ name, campus, score, date: new Date().toLocaleDateString('tr-TR') });
-    }
-    localList.sort((a, b) => b.score - a.score);
-    localStorage.setItem('ps_leaderboard', JSON.stringify(localList));
-
-    // Firebase REST API ile buluta kaydet
-    try {
-        const documentId = `${name.toLowerCase()}_${campus.replace(/\s+/g, '').toLowerCase()}`;
-        const url = `${FIREBASE_CONFIG.collectionUrl}/${documentId}`;
-
-        const payload = {
-            fields: {
-                name: { stringValue: name },
-                campus: { stringValue: campus },
-                score: { integerValue: String(score) },
-                date: { stringValue: new Date().toLocaleDateString('tr-TR') }
-            }
-        };
-
-        await fetch(url, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        UI.showToast("Skor buluta kaydedildi!", "success");
-    } catch (e) {
-        console.warn("Firebase kaydı atlandı, yerel skor saklandı.");
-    }
-}
-
+// --- GLOBAL LİDERLİK TABLOSU (OKUMA) ---
 async function fetchLeaderboardData() {
     const now = Date.now();
     // 30 saniyelik cache kontrolü
@@ -872,7 +871,6 @@ async function fetchLeaderboardData() {
         console.warn("Bulut tablosu alınamadı, yerel tablo kullanılıyor.");
     }
 
-    // Fallback: localStorage
     const local = JSON.parse(localStorage.getItem('ps_leaderboard') || '[]');
     AppState.leaderboardCache = local;
     return local;

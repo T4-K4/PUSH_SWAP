@@ -11,6 +11,11 @@ const AppState = {
     score: 0,
     optimalSolutionLength: 2,
 
+    // Sunucu Tarafı Doğrulama & Anti-Cheat (Yarışma Modu)
+    sessionId: null,
+    serverLevels: [],
+    completedSolutions: [], // { level: 1, ops: [...] }
+
     // İpucu Sistemi
     hintsLeft: 3,
 
