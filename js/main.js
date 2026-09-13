@@ -1,10 +1,48 @@
+// --- UYGULAMA DURUMU (APP STATE) ---
+const AppState = {
+    currentLang: localStorage.getItem('ps_lang') || 'tr',
+    playerName: localStorage.getItem('ps_nick') || "cadet42",
+    playerCampus: localStorage.getItem('ps_campus') || "42 Istanbul",
+
+    gameMode: 'practice',
+    currentLevel: 1,
+    maxLevel: 13,
+    score: 0,
+    optimalSolutionLength: 2,
+
+    sessionId: null,
+    serverLevels: [],
+    completedSolutions: [],
+
+    hintsLeft: 3,
+
+    initialStack: [],
+    stackA: [],
+    stackB: [],
+    userPipeline: [],
+    isSimulating: false,
+
+    totalSeconds: 25 * 60,
+    timerInterval: null,
+    isPaused: false,
+
+    activeTab: 'c',
+    checkerOS: 'linux',
+    isCompiled: false,
+    lastTestReport: [],
+    evalDifficulty: 'random',
+
+    activeLeaderboardTab: 'cadets',
+    leaderboardCache: [],
+    leaderboardLastFetch: 0
+};
+
 // --- UYGULAMA BAŞLANGICI ---
 function initApp() {
     UI.applyTranslations();
     UI.renderCommandsPanel();
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 
-    // Kayıtlı kullanıcı adı ve kampüsü yükle
     const savedNick = localStorage.getItem('ps_nick');
     if (savedNick) AppState.playerName = savedNick;
     const pName = document.getElementById('player-name');
@@ -29,7 +67,7 @@ function toggleLanguage() {
     UI.applyTranslations();
 }
 
-// --- GİRİŞ VE KAMPÜS SEÇİMİ (YARIŞMA MODU) ---
+// --- GİRİŞ VE KAMPÜS SEÇİMİ ---
 function triggerCompeteMode() {
     const modeModal = document.getElementById('mode-modal');
     if (modeModal) modeModal.style.display = 'none';
@@ -48,7 +86,6 @@ function submitLogin() {
     const nick = inputField ? inputField.value.trim() : "";
     const campus = campusSelect ? campusSelect.value : "42 Istanbul";
 
-    // 42 Intra Doğrulaması (2-12 karakter; harf, rakam, _ veya -)
     const validNickRegex = /^[a-zA-Z0-9_-]{2,12}$/;
     if (!validNickRegex.test(nick)) {
         UI.showToast(I18N[AppState.currentLang].toast_invalid_nick, "error");
@@ -85,7 +122,6 @@ function promptChangeName() {
     }
 }
 
-// Butonları ve Etkileşimi Kilitleme/Açma (Race Condition Önleyici)
 function setControlsLocked(locked) {
     const targets = document.querySelectorAll('.command-card, .btn-run, .btn-clear, #hint-btn, .pipeline-chip');
     targets.forEach(el => {
@@ -100,7 +136,6 @@ function selectMode(mode) {
     const modeModal = document.getElementById('mode-modal');
     if (modeModal) modeModal.style.display = 'none';
 
-    // Mod değişiminde eski verilerin (antrenman vb.) yarışmaya taşınmasını KESİN ENGELLE
     AppState.initialStack = [];
     AppState.stackA = [];
     AppState.stackB = [];
@@ -123,7 +158,6 @@ function selectMode(mode) {
     setDisplay('timer-box', (mode === 'compete') ? 'flex' : 'none');
     setDisplay('hint-box', (mode === 'compete') ? 'flex' : 'none');
     setDisplay('hint-btn', (mode === 'compete') ? 'inline-flex' : 'none');
-    setDisplay('pause-btn', (mode === 'compete') ? 'inline-flex' : 'none');
     setDisplay('restart-btn', (mode === 'compete') ? 'inline-flex' : 'none');
 
     const term = document.getElementById('terminal-view');
@@ -186,7 +220,7 @@ function handleHomeNavigation() {
     }
 }
 
-// --- SUNUCU DOĞRULAMALI YARIŞMA OTURUMU & KESİNTİSİZ BAŞLATMA ---
+// --- SUNUCU DOĞRULAMALI YARIŞMA OTURUMU ---
 async function startCompetitionSession() {
     setControlsLocked(true);
     const tracker = document.getElementById('live-step-tracker');
@@ -214,7 +248,6 @@ async function startCompetitionSession() {
             throw new Error(data.error);
         }
     } catch (e) {
-        // Fallback: Acil Durum Yerel Seviyeleri (Render uykudaysa oyun asla kilitlenmez)
         AppState.serverLevels = [];
         for (let lvl = 1; lvl <= AppState.maxLevel; lvl++) {
             const count = lvl + 2;
@@ -274,7 +307,7 @@ function useHint() {
         UI.showToast(I18N[AppState.currentLang].toast_no_hints, "error");
         return;
     }
-    if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+    if (AppState.isSimulating) return;
 
     const simA = [...AppState.initialStack];
     const simB = [];
@@ -317,7 +350,6 @@ function evaluateResult() {
         return;
     }
 
-    // Puanlama ve bildirim
     if (steps < AppState.optimalSolutionLength) {
         AppState.score += 200;
         UI.showToast(AppState.currentLang === 'tr' ? "Efsanevi! Hedefin altında tamamladın (+200 Puan)" : "Legendary! Beat benchmark (+200 Pts)", "success");
@@ -330,7 +362,6 @@ function evaluateResult() {
     }
     updateScoreUI();
 
-    // Bu seviyenin çözümünü kaydet
     AppState.completedSolutions.push({
         level: AppState.currentLevel,
         ops: [...AppState.userPipeline]
@@ -390,24 +421,19 @@ function updateScoreUI() {
     if (scoreInd) scoreInd.innerText = AppState.score;
 }
 
-// --- ZAMANLAYICI KONTROLLERİ ---
+// --- ZAMANLAYICI (PAUSE KALDIRILDI, KESİNTİSİZ AKAR) ---
 function startCompetitionTimer() {
     clearInterval(AppState.timerInterval);
     AppState.totalSeconds = 25 * 60;
-    AppState.isPaused = false;
-    const pauseBtn = document.getElementById('pause-btn');
-    if (pauseBtn) pauseBtn.innerText = AppState.currentLang === 'tr' ? "Durdur" : "Pause";
     updateTimerDisplay();
 
     AppState.timerInterval = setInterval(() => {
-        if (!AppState.isPaused) {
-            if (AppState.totalSeconds > 0) {
-                AppState.totalSeconds--;
-                updateTimerDisplay();
-            } else {
-                clearInterval(AppState.timerInterval);
-                finishCompetitionTime();
-            }
+        if (AppState.totalSeconds > 0) {
+            AppState.totalSeconds--;
+            updateTimerDisplay();
+        } else {
+            clearInterval(AppState.timerInterval);
+            finishCompetitionTime();
         }
     }, 1000);
 }
@@ -417,19 +443,6 @@ function updateTimerDisplay() {
     const s = (AppState.totalSeconds % 60).toString().padStart(2, '0');
     const timerInd = document.getElementById('timer-indicator');
     if (timerInd) timerInd.innerText = `${m}:${s}`;
-}
-
-function togglePauseComp() {
-    AppState.isPaused = !AppState.isPaused;
-    const pauseBtn = document.getElementById('pause-btn');
-    if (pauseBtn) {
-        pauseBtn.innerText = AppState.isPaused
-            ? (AppState.currentLang === 'tr' ? "Devam Et" : "Resume")
-            : (AppState.currentLang === 'tr' ? "Durdur" : "Pause");
-    }
-    UI.showToast(AppState.isPaused
-        ? (AppState.currentLang === 'tr' ? "Durduruldu" : "Paused")
-        : (AppState.currentLang === 'tr' ? "Devam ediyor" : "Resumed"), "warn");
 }
 
 function restartCompetition() {
@@ -481,7 +494,8 @@ function loadCeratRandom(count) {
     AppState.userPipeline = [];
     UI.renderPipeline(AppState.userPipeline);
     AppState.optimalSolutionLength = Solver.calculateTargetOps(count);
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 }
@@ -504,20 +518,21 @@ function promptCustomInput() {
     AppState.userPipeline = [];
     UI.renderPipeline(AppState.userPipeline);
     AppState.optimalSolutionLength = Solver.calculateTargetOps(parsed.length);
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 }
 
 // --- BORU HATTI & SİMÜLASYON ---
 function addCommandToPipeline(cmd) {
-    if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+    if (AppState.isSimulating) return;
     AppState.userPipeline.push(cmd);
     UI.renderPipeline(AppState.userPipeline);
 }
 
 function removeCommand(idx) {
-    if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+    if (AppState.isSimulating) return;
     AppState.userPipeline.splice(idx, 1);
     UI.renderPipeline(AppState.userPipeline);
 }
@@ -530,7 +545,7 @@ function handleDrop(e) {
 }
 
 function resetCurrentPipeline() {
-    if (AppState.isSimulating || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+    if (AppState.isSimulating) return;
     AppState.userPipeline = [];
     UI.renderPipeline(AppState.userPipeline);
     AppState.stackA = [...AppState.initialStack];
@@ -540,9 +555,8 @@ function resetCurrentPipeline() {
     if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Canlı Adım: Sıfırlandı" : "Live Step: Reset";
 }
 
-// Korumalı Yürütme Motoru (Tıklama Spam'ına Karşı Kilitli)
 async function executeUserPipeline() {
-    if (AppState.isSimulating || AppState.userPipeline.length === 0 || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+    if (AppState.isSimulating || AppState.userPipeline.length === 0) return;
 
     AppState.isSimulating = true;
     setControlsLocked(true);
@@ -597,7 +611,7 @@ function setCheckerOS(os) {
     });
 }
 
-// --- EVO CHECKER & DERLEME ENTEGRASYONLARI (GITHUB + ZIP) ---
+// --- EVO CHECKER & DERLEME ENTEGRASYONLARI ---
 async function fetchGithubRepo() {
     const input = document.getElementById('github-repo-input')?.value.trim();
     if (!input) {
@@ -703,8 +717,10 @@ async function runEvaluatorWithArray(arr, count, difficulty) {
     AppState.stackB = [];
     AppState.optimalSolutionLength = Solver.calculateTargetOps(count);
 
-    document.getElementById('best-moves-count').innerText = AppState.optimalSolutionLength;
-    document.getElementById('live-step-tracker').innerText = `./push_swap koşturuluyor...`;
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = AppState.optimalSolutionLength;
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = `./push_swap koşturuluyor...`;
 
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.showToast(`${count} Sayı (${difficulty}) push_swap binary'sine gönderiliyor...`, "warn");
@@ -713,13 +729,13 @@ async function runEvaluatorWithArray(arr, count, difficulty) {
 
     if (!result.success) {
         alert(`Çalıştırma Hatası:\n${result.error}`);
-        document.getElementById('live-step-tracker').innerText = "Crash!";
+        if (tracker) tracker.innerText = "Crash!";
         return;
     }
 
     AppState.userPipeline = result.ops;
     UI.renderPipeline(AppState.userPipeline);
-    document.getElementById('live-step-tracker').innerText = `Üretilen Hamle: ${result.ops.length}`;
+    if (tracker) tracker.innerText = `Üretilen Hamle: ${result.ops.length}`;
 
     const term = document.getElementById('terminal-view');
     if (term) {
@@ -781,11 +797,13 @@ function resetEvalMode() {
     if (gitInput) gitInput.value = "";
 
     switchTerminalTab('c');
-    document.getElementById('best-moves-count').innerText = "6";
-    document.getElementById('live-step-tracker').innerText = "Hazır";
+    const best = document.getElementById('best-moves-count');
+    if (best) best.innerText = "6";
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = "Hazır";
 }
 
-// 14 MADDELİK TAM TEŞEKKÜLLÜ 42 EVO STRES TESTİ (Eksiksiz)
+// 14 MADDELİK TAM TEŞEKKÜLLÜ 42 EVO STRES TESTİ
 async function runEvoStressTest() {
     const term = document.getElementById('terminal-view');
     if (term) term.contentEditable = "false";
@@ -955,3 +973,46 @@ function switchLeaderboardTab(tab) {
 
     UI.renderLeaderboard(AppState.leaderboardCache, tab);
 }
+
+// ==========================================
+// ANTI-CHEAT: ODAK KAYBINDA SEVİYEYİ YENİLE
+// ==========================================
+function triggerAntiCheatReroll() {
+    // Sadece yarışma modundaysak ve o an simülasyon çalışmıyorsa devreye girer
+    if (AppState.gameMode !== 'compete' || AppState.isSimulating) return;
+
+    const count = AppState.currentLevel + 2;
+    const newNumbers = Engine.generateRandomArray(count);
+
+    // Sunucu oturumundaki sayılarla senkronize et
+    if (AppState.serverLevels && AppState.serverLevels.length > 0) {
+        const lvlObj = AppState.serverLevels.find(l => l.level === AppState.currentLevel);
+        if (lvlObj) {
+            lvlObj.numbers = [...newNumbers];
+        }
+    }
+
+    AppState.initialStack = [...newNumbers];
+    AppState.stackA = [...newNumbers];
+    AppState.stackB = [];
+    AppState.userPipeline = [];
+
+    UI.renderPipeline(AppState.userPipeline);
+    UI.renderStacks(AppState.stackA, AppState.stackB);
+    UI.renderTerminal(AppState.activeTab, AppState.initialStack);
+
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Anti-Cheat: Sayılar Yenilendi!" : "Anti-Cheat: Numbers Rerolled!";
+
+    UI.showToast(
+        AppState.currentLang === 'tr'
+            ? "⚠️ Sayfa odağı kayboldu! Yapay zeka koruması gereği sayılar yenilendi."
+            : "⚠️ Focus lost! Numbers rerolled due to anti-cheat policy.",
+        "error"
+    );
+}
+
+window.addEventListener('blur', triggerAntiCheatReroll);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) triggerAntiCheatReroll();
+});

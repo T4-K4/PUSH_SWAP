@@ -41,8 +41,8 @@
         </div>
     </div>
 
-    <!-- 2. LOGIN & KAMPÜS MODALI (Sadece Yarışma Seçilince Açılır) -->
-    <div id="login-modal" class="overlay-screen" style="display: none;">
+    <!-- 2. LOGIN & KAMPÜS MODALI -->
+    <div id="login-modal" class="modal-overlay" style="display: none;">
         <div class="login-card">
             <div style="font-size: 36px; margin-bottom: 8px;">🏆</div>
             <h2 style="color: var(--accent-blue); margin: 0 0 6px 0; font-size: 22px;" data-i18n="login_title">Yarışma Kaydı</h2>
@@ -71,36 +71,38 @@
         </div>
     </div>
 
-    <!-- 3. MOD SEÇİM EKRANI (Açılışta Karşılar) -->
-    <div id="mode-modal" class="overlay-screen" style="display: flex;">
-        <h1 style="color: var(--accent-blue); font-size: 32px; font-weight: 900; margin: 0;">42 PUSH_SWAP TRAINER</h1>
-        <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px;" data-i18n="mode_select_subtitle">Başlamak için bir oyun modu seçin</p>
+    <!-- 3. MOD SEÇİM EKRANI -->
+    <div id="mode-modal" class="modal-overlay" style="display: flex;">
+        <div style="display: flex; flex-direction: column; align-items: center; max-width: 820px; width: 90%;">
+            <h1 style="color: var(--accent-blue); font-size: 32px; font-weight: 900; margin: 0;">42 PUSH_SWAP TRAINER</h1>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px; margin-bottom: 25px;" data-i18n="mode_select_subtitle">Başlamak için bir oyun modu seçin</p>
 
-        <div class="mode-cards">
-            <div class="mode-card" onclick="triggerCompeteMode()">
-                <div class="mode-icon">🏆</div>
-                <div class="mode-title" data-i18n="mode_compete_title">Yarışma Modu</div>
-                <div class="mode-desc" data-i18n="mode_compete_desc">Aşamalı 13 seviye (3-15 sayı), taktiksel ipuçları ve global skor tablosu.</div>
-            </div>
-            <div class="mode-card" onclick="selectMode('practice')">
-                <div class="mode-icon">🧘‍♂️</div>
-                <div class="mode-title" data-i18n="mode_practice_title">Serbest Antrenman</div>
-                <div class="mode-desc" data-i18n="mode_practice_desc">İstediğin sayı adedini seç, rahatça algoritma ve yığın mantığı çalış.</div>
-            </div>
-            <div class="mode-card" onclick="selectMode('cerat')">
-                <div class="mode-icon">🛠️</div>
-                <div class="mode-title" data-i18n="mode_cerat_title">Cerat Oluşturma</div>
-                <div class="mode-desc" data-i18n="mode_cerat_desc">Kendi sayılarını gir veya 500-2000 sayı ile performansı incele.</div>
-            </div>
-            <div class="mode-card" onclick="selectMode('evaluator')">
-                <div class="mode-icon">🧪</div>
-                <div class="mode-title" data-i18n="mode_eval_title">Evo & Checker Modu</div>
-                <div class="mode-desc" data-i18n="mode_eval_desc">GitHub veya ZIP ile kod yükle, farklı zorluk derecelerinde algoritmayı patlatmayı dene.</div>
+            <div class="mode-cards">
+                <div class="mode-card" onclick="triggerCompeteMode()">
+                    <div class="mode-icon">🏆</div>
+                    <div class="mode-title" data-i18n="mode_compete_title">Yarışma Modu</div>
+                    <div class="mode-desc" data-i18n="mode_compete_desc">Aşamalı 13 seviye (3-15 sayı), taktiksel ipuçları ve global skor tablosu.</div>
+                </div>
+                <div class="mode-card" onclick="selectMode('practice')">
+                    <div class="mode-icon">🧘‍♂️</div>
+                    <div class="mode-title" data-i18n="mode_practice_title">Serbest Antrenman</div>
+                    <div class="mode-desc" data-i18n="mode_practice_desc">İstediğin sayı adedini seç, rahatça algoritma ve yığın mantığı çalış.</div>
+                </div>
+                <div class="mode-card" onclick="selectMode('cerat')">
+                    <div class="mode-icon">🛠️</div>
+                    <div class="mode-title" data-i18n="mode_cerat_title">Cerat Oluşturma</div>
+                    <div class="mode-desc" data-i18n="mode_cerat_desc">Kendi sayılarını gir veya 500-2000 sayı ile performansı incele.</div>
+                </div>
+                <div class="mode-card" onclick="selectMode('evaluator')">
+                    <div class="mode-icon">🧪</div>
+                    <div class="mode-title" data-i18n="mode_eval_title">Evo & Checker Modu</div>
+                    <div class="mode-desc" data-i18n="mode_eval_desc">GitHub veya ZIP ile kod yükle, farklı zorluk derecelerinde algoritmayı patlatmayı dene.</div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Üst Başlık (Header) -->
+    <!-- ÜST BAŞLIK (HEADER) -->
     <header>
         <div class="header-left">
             <div class="logo" onclick="handleHomeNavigation()">42 PUSH_SWAP</div>
@@ -113,7 +115,6 @@
             <button class="nav-btn" onclick="openLeaderboardModal()">
                 🏆 <span data-i18n="nav_scores">Skorlar</span>
             </button>
-            <!-- Dil Değiştirici -->
             <button class="nav-btn" onclick="toggleLanguage()" id="lang-toggle-btn" style="color:var(--accent-yellow); font-weight:bold;">
                 🌐 EN
             </button>
@@ -225,7 +226,7 @@
                     <div class="actions-group">
                         <button class="btn btn-clear" onclick="resetCurrentPipeline()" data-i18n="btn_clear">Temizle</button>
                         <button id="hint-btn" class="btn btn-pause" onclick="useHint()" style="display: none; background:#0369a1; color:#fff;" data-i18n="btn_hint">💡 İpucu Al</button>
-                        <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;" data-i18n="btn_pause">Durdur</button>
+                        <!-- Durdur butonu yarışma kuralları gereği tamamen kaldırıldı -->
                         <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;" data-i18n="btn_restart">Yeniden Başlat</button>
                         <button class="btn btn-run" onclick="executeUserPipeline()" data-i18n="btn_simulate">Simüle Et & Doğrula</button>
                     </div>
@@ -233,12 +234,9 @@
             </div>
 
             <div class="terminal-panel">
-                <!-- GITHUB REPO & ZIP YÜKLEME ÇUBUĞU -->
                 <div id="github-bar" style="display: none; gap: 6px; padding: 4px 0 8px 0; border-bottom: 1px solid #1e2436; margin-bottom: 6px; flex-wrap: wrap;">
                     <input type="text" id="github-repo-input" placeholder="GitHub Repo URL (örn: github.com/cadet/push_swap)" style="flex:1; min-width: 140px; background:#141724; border:1px solid var(--border-color); border-radius:6px; color:#fff; font-size:11px; padding:4px 8px; outline:none;">
                     <button class="cerat-btn" onclick="fetchGithubRepo()" style="background:#0284c7; color:#fff;" data-i18n="btn_pull_code">Kodu Çek</button>
-
-                    <!-- ZIP Dosyası Seçici -->
                     <input type="file" id="zip-file-input" accept=".zip" style="display: none;" onchange="handleZipFileUpload(event)">
                     <button class="cerat-btn" onclick="document.getElementById('zip-file-input').click()" style="background:#059669; color:#fff;" data-i18n="btn_upload_zip">📁 ZIP Yükle</button>
                 </div>
@@ -281,15 +279,13 @@
         </div>
     </div>
 
-    <!-- Konfeti Canvas Alanı -->
     <canvas id="confetti-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:99999; display:none;"></canvas>
 
-    <!-- JS Yükleme Sıralaması -->
+    <!-- JS Yükleme Sıralaması (404 veren sahte dosyalar temizlendi) -->
     <script src="js/config.js"></script>
-    <script src="js/state.js"></script>
+    <script src="js/main.js"></script>
     <script src="js/engine.js"></script>
     <script src="js/solver.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/main.js"></script>
 </body>
 </html>
