@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "adm-zip": "^0.5.14",
+    "adm-zip": "^0.5.18",
     "cors": "^2.8.6",
     "express": "^4.22.2"
   }

@@ -1,28 +1,24 @@
-FROM ubuntu:22.04
+FROM node:18-bullseye
 
-ENV DEBIAN_FRONTEND=noninteractive
+# GCC, Make, Git ve temel C derleme araçlarını kur
 RUN apt-get update && apt-get install -y \
-    build-essential \
     gcc \
     make \
     git \
-    curl \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
-
-# Yetkisiz Linux kullanıcısı oluştur
-RUN useradd -m -u 1001 cadet
 
 WORKDIR /app
 
-# Uygulamayı kopyala ve izinleri ayarla
-COPY server.js ./
-RUN chown -R cadet:cadet /app
+# Bağımlılıkları kopyala ve yükle
+COPY package*.json ./
+RUN npm install
 
-# Yetkisiz kullanıcıya geç
-USER cadet
+# Tüm proje dosyalarını (server.js dahil) kopyala
+COPY . .
 
+# Portu dışa aç
 EXPOSE 3000
 
+# Sunucuyu başlat
 CMD ["node", "server.js"]
