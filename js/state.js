@@ -1,20 +1,40 @@
 const AppState = {
-    gameMode: 'compete',
+    // Dil ve Kimlik
+    currentLang: localStorage.getItem('ps_lang') || 'tr',
+    playerName: localStorage.getItem('ps_nick') || "cadet42",
+    playerCampus: localStorage.getItem('ps_campus') || "42 Istanbul",
+
+    // Oyun ve Seviye Durumu
+    gameMode: 'practice', // 'compete', 'practice', 'cerat', 'evaluator'
     currentLevel: 1,
     maxLevel: 13,
     score: 0,
-    playerName: "student42",
+    optimalSolutionLength: 2,
+
+    // İpucu Sistemi
+    hintsLeft: 3,
+
+    // Yığınlar ve Boru Hattı
     initialStack: [],
     stackA: [],
     stackB: [],
     userPipeline: [],
-    optimalSolutionLength: 2,
     isSimulating: false,
+
+    // Zamanlayıcı
     totalSeconds: 25 * 60,
     timerInterval: null,
     isPaused: false,
-    activeTab: 'c',
-    isFirstGuideSeen: false,
+
+    // Terminal ve Checker Durumu
+    activeTab: 'c', // 'c', 'binary', 'report'
     checkerOS: 'linux',
-    lastTestReport: []
+    isCompiled: false,
+    lastTestReport: [],
+    evalDifficulty: 'random', // 'random', 'nearly', 'worst'
+
+    // Liderlik Tablosu
+    activeLeaderboardTab: 'cadets', // 'cadets', 'campuses'
+    leaderboardCache: [],
+    leaderboardLastFetch: 0
 };

@@ -3,6 +3,7 @@ const { exec, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const AdmZip = require('adm-zip');
 
 const PORT = process.env.PORT || 3000;
 let currentRepoDir = null;
@@ -25,7 +26,7 @@ function scanDirectory(dir) {
     try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
-            if (entry.name === '.git' || entry.name === 'node_modules') continue;
+            if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === '__MACOSX') continue;
             const fullPath = path.join(dir, entry.name);
             if (entry.isDirectory()) {
                 dirs.push(fullPath);
@@ -49,6 +50,86 @@ function hasMain(filePath) {
     }
 }
 
+function compilePushSwap(targetDir, callback) {
+    // Linux dosya sistemi case-sensitivity alias
+    try {
+        const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+        entries.filter(e => e.isDirectory()).forEach(d => {
+            const orig = d.name;
+            const lower = orig.toLowerCase();
+            const upper = orig.charAt(0).toUpperCase() + orig.slice(1);
+
+            if (orig !== lower && !fs.existsSync(path.join(targetDir, lower))) {
+                fs.symlinkSync(orig, path.join(targetDir, lower), 'dir');
+            }
+            if (orig !== upper && !fs.existsSync(path.join(targetDir, upper))) {
+                fs.symlinkSync(orig, path.join(targetDir, upper), 'dir');
+            }
+        });
+    } catch (e) {}
+
+    const { files, dirs } = scanDirectory(targetDir);
+    const cFiles = files.filter(f => f.endsWith('.c'));
+
+    if (cFiles.length === 0) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        return callback({ success: false, error: 'Projeden .c uzantılı kaynak dosya bulunamadı!' });
+    }
+
+    const includeFlags = dirs.map(d => `-I"${d}"`).join(' ');
+    const mains = [];
+    const nonMains = [];
+
+    cFiles.forEach(file => {
+        if (hasMain(file)) mains.push(file);
+        else nonMains.push(file);
+    });
+
+    if (mains.length === 0) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        return callback({ success: false, error: "Projeden 'main' fonksiyonu içeren bir dosya bulunamadı!" });
+    }
+
+    let chosenMain = mains.find(f => {
+        const b = path.basename(f).toLowerCase();
+        return !b.includes('checker') && !b.includes('bonus');
+    }) || mains[0];
+
+    const unusedMains = mains.filter(f => f !== chosenMain).map(f => path.relative(targetDir, f));
+    const compileTargets = [chosenMain, ...nonMains];
+    const gccCmd = `gcc -w ${includeFlags} ${compileTargets.map(f => `"${f}"`).join(' ')} -o push_swap`;
+
+    console.log(`[+] GCC ile derleniyor...`);
+    exec(gccCmd, { cwd: targetDir, timeout: 45000 }, (gccErr, stdout, stderr) => {
+        const binaryPath = path.join(targetDir, 'push_swap');
+
+        if (!fs.existsSync(binaryPath)) {
+            fs.rmSync(targetDir, { recursive: true, force: true });
+            return callback({
+                success: false,
+                error: `Derleme Başarısız:\n${stderr || stdout || "push_swap üretilemedi!"}`
+            });
+        }
+
+        try { fs.chmodSync(binaryPath, 0o755); } catch (e) {}
+
+        if (currentRepoDir && fs.existsSync(currentRepoDir)) {
+            try { fs.rmSync(currentRepoDir, { recursive: true, force: true }); } catch (e) {}
+        }
+        currentRepoDir = targetDir;
+
+        let note = "";
+        if (unusedMains.length > 0) {
+            note = `\n\n[UYARI] Derlemeye dahil edilmeyen ikincil main dosyaları:\n-> ` + unusedMains.join('\n-> ');
+        }
+
+        return callback({
+            success: true,
+            message: 'Kod başarıyla derlendi ve push_swap hazır!' + note
+        });
+    });
+}
+
 const server = http.createServer((req, res) => {
     setCorsHeaders(res);
 
@@ -58,19 +139,19 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    let body = '';
+    let chunks = [];
     req.on('data', chunk => {
-        body += chunk;
-        if (body.length > 2 * 1024 * 1024) req.destroy();
+        chunks.push(chunk);
     });
 
     req.on('end', () => {
+        const rawBody = Buffer.concat(chunks);
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
         const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
 
         let parsedBody = {};
-        if (body) {
-            try { parsedBody = JSON.parse(body); } catch (e) {}
+        if (rawBody.length > 0) {
+            try { parsedBody = JSON.parse(rawBody.toString('utf8')); } catch (e) {}
         }
 
         // HEALTH CHECK
@@ -81,7 +162,7 @@ const server = http.createServer((req, res) => {
             });
         }
 
-        // 1. DERLEME ENDPOINT'I
+        // 1. GITHUB REPO DERLEME ENDPOINT'I
         if (pathname === '/api/compile' && req.method === 'POST') {
             let { repoUrl } = parsedBody;
             if (!repoUrl) return sendJson(res, 400, { success: false, error: 'Repo linki boş olamaz!' });
@@ -102,97 +183,47 @@ const server = http.createServer((req, res) => {
                     fs.rmSync(tempDir, { recursive: true, force: true });
                     return sendJson(res, 400, { success: false, error: `Git Klonlama Hatası: ${cloneErr.message}` });
                 }
-
-                // Linux dosya sistemi case-sensitivity alias
-                try {
-                    const entries = fs.readdirSync(tempDir, { withFileTypes: true });
-                    entries.filter(e => e.isDirectory()).forEach(d => {
-                        const orig = d.name;
-                        const lower = orig.toLowerCase();
-                        const upper = orig.charAt(0).toUpperCase() + orig.slice(1);
-
-                        if (orig !== lower && !fs.existsSync(path.join(tempDir, lower))) {
-                            fs.symlinkSync(orig, path.join(tempDir, lower), 'dir');
-                        }
-                        if (orig !== upper && !fs.existsSync(path.join(tempDir, upper))) {
-                            fs.symlinkSync(orig, path.join(tempDir, upper), 'dir');
-                        }
-                    });
-                } catch (e) {}
-
-                const { files, dirs } = scanDirectory(tempDir);
-                const cFiles = files.filter(f => f.endsWith('.c'));
-
-                if (cFiles.length === 0) {
-                    fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: 'Repoda .c dosyası bulunamadı!' });
-                }
-
-                const includeFlags = dirs.map(d => `-I"${d}"`).join(' ');
-                const mains = [];
-                const nonMains = [];
-
-                cFiles.forEach(file => {
-                    if (hasMain(file)) mains.push(file);
-                    else nonMains.push(file);
-                });
-
-                if (mains.length === 0) {
-                    fs.rmSync(tempDir, { recursive: true, force: true });
-                    return sendJson(res, 400, { success: false, error: "Repoda 'main' fonksiyonu bulunamadı!" });
-                }
-
-                let chosenMain = mains.find(f => {
-                    const b = path.basename(f).toLowerCase();
-                    return !b.includes('checker') && !b.includes('bonus');
-                }) || mains[0];
-
-                const unusedMains = mains.filter(f => f !== chosenMain).map(f => path.relative(tempDir, f));
-                const compileTargets = [chosenMain, ...nonMains];
-                const gccCmd = `gcc -w ${includeFlags} ${compileTargets.map(f => `"${f}"`).join(' ')} -o push_swap`;
-
-                console.log(`[+] GCC ile derleniyor...`);
-                exec(gccCmd, { cwd: tempDir, timeout: 45000 }, (gccErr, stdout, stderr) => {
-                    const binaryPath = path.join(tempDir, 'push_swap');
-
-                    if (!fs.existsSync(binaryPath)) {
-                        fs.rmSync(tempDir, { recursive: true, force: true });
-                        return sendJson(res, 400, {
-                            success: false,
-                            error: `Derleme Başarısız:\n${stderr || stdout || "push_swap üretilemedi!"}`
-                        });
-                    }
-
-                    try { fs.chmodSync(binaryPath, 0o755); } catch (e) {}
-
-                    if (currentRepoDir && fs.existsSync(currentRepoDir)) {
-                        try { fs.rmSync(currentRepoDir, { recursive: true, force: true }); } catch (e) {}
-                    }
-                    currentRepoDir = tempDir;
-
-                    let note = "";
-                    if (unusedMains.length > 0) {
-                        note = `\n\n[UYARI] Derlemeye dahil edilmeyen ikincil main dosyaları:\n-> ` + unusedMains.join('\n-> ');
-                    }
-
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: 'Kod başarıyla derlendi ve hazır!' + note
-                    });
+                compilePushSwap(tempDir, (result) => {
+                    sendJson(res, result.success ? 200 : 400, result);
                 });
             });
             return;
         }
 
-        // 2. ÇALIŞTIRMA ENDPOINT'I (execFile: Tırnaklı & Boş Argümanları Destekler)
+        // 2. ZIP DOSYASI YÜKLEME VE DERLEME ENDPOINT'I
+        if (pathname === '/api/upload-zip' && req.method === 'POST') {
+            const { fileBase64 } = parsedBody;
+            if (!fileBase64) {
+                return sendJson(res, 400, { success: false, error: 'Yüklenecek ZIP verisi bulunamadı!' });
+            }
+
+            const tempDir = path.join(os.tmpdir(), `ps_zip_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+            fs.mkdirSync(tempDir, { recursive: true });
+
+            try {
+                const zipBuffer = Buffer.from(fileBase64, 'base64');
+                const zip = new AdmZip(zipBuffer);
+                zip.extractAllTo(tempDir, true);
+                console.log(`[+] ZIP başarıyla açıldı: ${tempDir}`);
+            } catch (err) {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+                return sendJson(res, 400, { success: false, error: `ZIP Arşivi Açılamadı: ${err.message}` });
+            }
+
+            compilePushSwap(tempDir, (result) => {
+                sendJson(res, result.success ? 200 : 400, result);
+            });
+            return;
+        }
+
+        // 3. BINARY ÇALIŞTIRMA ENDPOINT'I
         if (pathname === '/api/run' && req.method === 'POST') {
             const { args } = parsedBody;
 
             if (!currentRepoDir || !fs.existsSync(path.join(currentRepoDir, 'push_swap'))) {
-                return sendJson(res, 400, { success: false, error: 'Aktif push_swap bulunamadı! Önce repo bağlantısını girip derleyin.' });
+                return sendJson(res, 400, { success: false, error: 'Aktif push_swap binary bulunamadı! Önce repo linki girin veya ZIP yükleyin.' });
             }
 
-            // Gelen argümanları diziye dönüştür
             let runArgs = [];
             if (Array.isArray(args)) {
                 runArgs = args.map(x => String(x));
@@ -202,7 +233,6 @@ const server = http.createServer((req, res) => {
 
             const binaryPath = path.join(currentRepoDir, 'push_swap');
 
-            // execFile kullanarak kabuk tırnaklama sorunlarını aşar ve injection'ı engeller
             execFile(binaryPath, runArgs, {
                 cwd: currentRepoDir,
                 timeout: 7000,
@@ -211,7 +241,6 @@ const server = http.createServer((req, res) => {
                 const combinedOutput = ((stdout || '') + (stderr || '')).trim();
                 const stderrTrimmed = (stderr || '').trim();
 
-                // 42 Kuralı: Hatalı girdilerde "Error" basılmalı
                 if (stderrTrimmed.toLowerCase().includes('error') || combinedOutput.toLowerCase().startsWith('error')) {
                     return sendJson(res, 200, {
                         success: true,
@@ -225,7 +254,7 @@ const server = http.createServer((req, res) => {
                     if (err.killed) {
                         return sendJson(res, 400, { success: false, error: 'TIMEOUT: Algoritma 7 saniyede bitmedi (Sonsuz Döngü)!' });
                     }
-                    return sendJson(res, 400, { success: false, error: `Çalışma Hatası (Segfault/Crash):\n${stderr || err.message}` });
+                    return sendJson(res, 400, { success: false, error: `Çalışma Hatası (Crash):\n${stderr || err.message}` });
                 }
 
                 const lines = stdout.split('\n').map(x => x.trim().toLowerCase()).filter(Boolean);
@@ -233,7 +262,7 @@ const server = http.createServer((req, res) => {
                 if (lines.length > 20000) {
                     return sendJson(res, 400, {
                         success: false,
-                        error: `Barem Aşımı: Program ${lines.length} satır hamle bastı! 42 baremlerine göre elendi.`
+                        error: `Barem Aşımı: Program ${lines.length} satır hamle bastı!`
                     });
                 }
 

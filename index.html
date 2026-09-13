@@ -13,105 +13,130 @@
 <body>
 
     <!-- 1. KILAVUZ MODALI -->
-    <div id="guide-modal" class="modal-overlay" style="display: flex;">
+    <div id="guide-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
-            <button class="modal-close" onclick="closeInitialGuide()">✕</button>
-            <div class="modal-title">Push_swap Eğitim Kılavuzu</div>
+            <button class="modal-close" onclick="UI.toggleModal('guide-modal', false)">✕</button>
+            <div class="modal-title" data-i18n="guide_title">Push_swap Eğitim Kılavuzu</div>
             <div class="modal-content">
-                <p>Bu uygulama, 42 müfredatındaki <b>push_swap</b> projesini kodlamadan önce algoritma mantığını ve yığın dinamiğini kavramanız için tasarlanmıştır.</p>
+                <p data-i18n="guide_desc">Bu uygulama, 42 müfredatındaki <b>push_swap</b> projesini kodlamadan önce algoritma mantığını ve yığın dinamiğini kavramanız için tasarlanmıştır.</p>
 
-                <h4>🎯 Hedef</h4>
-                <p>A yığınındaki daireleri (sayıları) <b>küçükten büyüğe</b> sıralamak ve B yığınını tamamen boş bırakmaktır. Daire boyutu sayının büyüklüğünü temsil eder.</p>
+                <h4 data-i18n="guide_target_title">🎯 Hedef</h4>
+                <p data-i18n="guide_target_desc">A yığınındaki sayıları küçükten büyüğe sıralamak ve B yığınını tamamen boş bırakmaktır. Daire boyutu sayının büyüklüğünü temsil eder.</p>
 
-                <h4>📋 Puanlama & Geçiş Kuralları</h4>
+                <h4 data-i18n="guide_rules_title">📋 Puanlama & Geçiş Kuralları</h4>
                 <ul>
-                    <li><b>100 Puan:</b> Sayıları sıralar ve sistemin belirlediği en kısa hamle sayısıyla <b>birebir aynı</b> adımda bitirirsen seviyeyi geçersin.</li>
-                    <li><b>200 Puan:</b> Sayıları sıralar ve sistemin bulduğu çözümü geçerek <b>daha az hamleyle</b> bitirirsen seviyeyi geçersin.</li>
-                    <li><b>50 Puan (Kabul Edilmez):</b> Sayıları sıralarsın ancak sistemin ideal adımından <b>daha uzun</b> bir yol izlersen seviyeyi geçemezsin (Tekrar denemen gerekir).</li>
-                    <li><b>0 Puan:</b> Dizi sıralanmamışsa veya B yığını boş değilse işlem başarısız sayılır.</li>
+                    <li data-i18n="guide_rule_1"><b>100 Puan:</b> Hedef hamle sayısıyla <b>birebir aynı</b> adımda bitirirsen seviyeyi geçersin.</li>
+                    <li data-i18n="guide_rule_2"><b>200 Puan:</b> Hedefin <b>altında</b> bir hamleyle bitirirsen seviyeyi geçersin.</li>
+                    <li data-i18n="guide_rule_3"><b>50 Puan:</b> Hedefin <b>üzerinde</b> bir hamleyle sıralarsan +50 puan alırsın.</li>
+                    <li data-i18n="guide_rule_4"><b>0 Puan:</b> Dizi sıralanmamışsa veya B yığını boş değilse işlem başarısız sayılır.</li>
                 </ul>
 
-                <h4>🕹️ Nasıl Oynanır?</h4>
-                <p>Soldaki komut kartlarını sağdaki işlem sırasına sürükleyip bırakın veya doğrudan karta tıklayın. Listenizi tamamlayınca <b>Simüle Et & Doğrula</b> butonuna basın.</p>
-
-                <h4>💻 C Kodu ve Binary Terminali</h4>
-                <p>Sağ paneldeki <b>C Kodu</b> sekmesinde operasyonların arkasındaki gerçek C fonksiyon gövdelerini görebilirsiniz. <b>Binary (Radix)</b> sekmesinde ise $O(n \log n)$ Radix sıralamasının bit bazlı mantığını inceleyebilirsiniz.</p>
+                <h4 data-i18n="guide_how_title">🕹️ Nasıl Oynanır?</h4>
+                <p data-i18n="guide_how_desc">Soldaki komut kartlarını sağdaki işlem sırasına ekleyin ve <b>Simüle Et & Doğrula</b> butonuna basın.</p>
 
                 <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
-                    <button class="btn btn-run" onclick="closeInitialGuide()" style="padding: 10px 20px; font-size: 13px;">Okudum, Giriş Yap →</button>
+                    <button class="btn btn-run" onclick="UI.toggleModal('guide-modal', false)" style="padding: 10px 20px; font-size: 13px;" data-i18n="btn_got_it">Anladım, Kapat ✕</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 2. LOGIN EKRANI -->
-    <div id="login-modal" class="overlay-screen">
+    <!-- 2. LOGIN & KAMPÜS MODALI (Sadece Yarışma Seçilince Açılır) -->
+    <div id="login-modal" class="overlay-screen" style="display: none;">
         <div class="login-card">
-            <div style="font-size: 36px; margin-bottom: 8px;">👤</div>
-            <h2 style="color: var(--accent-blue); margin: 0 0 6px 0; font-size: 22px;">Oyuncu Girişi</h2>
-            <p style="color: var(--text-muted); font-size: 13px; margin: 0;">Push_swap serüvenine başlamak için intra kullanıcı adınızı belirleyin.</p>
-            <input type="text" id="login-input-field" class="login-input" placeholder="Kullanıcı Adı (Örn: cadet42)" maxlength="16" onkeydown="if(event.key==='Enter') submitLogin()">
-            <button class="btn btn-run" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px;" onclick="submitLogin()">Devam Et →</button>
+            <div style="font-size: 36px; margin-bottom: 8px;">🏆</div>
+            <h2 style="color: var(--accent-blue); margin: 0 0 6px 0; font-size: 22px;" data-i18n="login_title">Yarışma Kaydı</h2>
+            <p style="color: var(--text-muted); font-size: 12px; margin: 0;" data-i18n="login_desc">Liderlik tablosu ve kampüs savaşı için bilgilerinizi doğrulayın.</p>
+
+            <input type="text" id="login-input-field" class="login-input" placeholder="42 nickinizi giriniz" maxlength="16" onkeydown="if(event.key==='Enter') submitLogin()">
+
+            <select id="login-campus-select" class="login-input" style="cursor: pointer; margin-top: 0;">
+                <option value="42 Istanbul">🇹🇷 42 Istanbul</option>
+                <option value="42 Kocaeli">🇹🇷 42 Kocaeli</option>
+                <option value="42 Paris">🇫🇷 42 Paris</option>
+                <option value="42 Berlin">🇩🇪 42 Berlin</option>
+                <option value="42 Wolfsburg">🇩🇪 42 Wolfsburg</option>
+                <option value="42 Madrid">🇪🇸 42 Madrid</option>
+                <option value="42 Barcelona">🇪🇸 42 Barcelona</option>
+                <option value="42 Tokyo">🇯🇵 42 Tokyo</option>
+                <option value="42 Seoul">🇰🇷 42 Seoul</option>
+                <option value="42 Abu Dhabi">🇦🇪 42 Abu Dhabi</option>
+                <option value="Other">🌐 Diğer / Other</option>
+            </select>
+
+            <div style="display:flex; gap:8px; width:100%;">
+                <button class="btn btn-clear" style="flex:1; justify-content:center;" onclick="document.getElementById('login-modal').style.display='none'; document.getElementById('mode-modal').style.display='flex';" data-i18n="btn_cancel">İptal</button>
+                <button class="btn btn-run" style="flex:2; justify-content: center; padding: 12px; font-size: 14px;" onclick="submitLogin()" data-i18n="btn_join_comp">Yarışmaya Katıl →</button>
+            </div>
         </div>
     </div>
 
-    <!-- 3. MOD SEÇİM EKRANI -->
-    <div id="mode-modal" class="overlay-screen">
+    <!-- 3. MOD SEÇİM EKRANI (Açılışta Karşılar) -->
+    <div id="mode-modal" class="overlay-screen" style="display: flex;">
         <h1 style="color: var(--accent-blue); font-size: 32px; font-weight: 900; margin: 0;">42 PUSH_SWAP TRAINER</h1>
-        <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px;">Başlamak için bir oyun modu seçin</p>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px;" data-i18n="mode_select_subtitle">Başlamak için bir oyun modu seçin</p>
+
         <div class="mode-cards">
-            <div class="mode-card" onclick="selectMode('compete')">
+            <div class="mode-card" onclick="triggerCompeteMode()">
                 <div class="mode-icon">🏆</div>
-                <div class="mode-title">Yarışma Modu</div>
-                <div class="mode-desc">Aşamalı 13 seviye (3-15 sayı) ve global skor tablosu.</div>
+                <div class="mode-title" data-i18n="mode_compete_title">Yarışma Modu</div>
+                <div class="mode-desc" data-i18n="mode_compete_desc">Aşamalı 13 seviye (3-15 sayı), taktiksel ipuçları ve global skor tablosu.</div>
             </div>
             <div class="mode-card" onclick="selectMode('practice')">
                 <div class="mode-icon">🧘‍♂️</div>
-                <div class="mode-title">Serbest Antrenman</div>
-                <div class="mode-desc">İstediğin sayı adedini seç, rahatça algoritma ve yığın mantığı çalış.</div>
+                <div class="mode-title" data-i18n="mode_practice_title">Serbest Antrenman</div>
+                <div class="mode-desc" data-i18n="mode_practice_desc">İstediğin sayı adedini seç, rahatça algoritma ve yığın mantığı çalış.</div>
             </div>
             <div class="mode-card" onclick="selectMode('cerat')">
                 <div class="mode-icon">🛠️</div>
-                <div class="mode-title">Cerat Oluşturma</div>
-                <div class="mode-desc">Kendi sayılarını gir veya 500, 1000, 1500, 2000 sayı ile test et.</div>
+                <div class="mode-title" data-i18n="mode_cerat_title">Cerat Oluşturma</div>
+                <div class="mode-desc" data-i18n="mode_cerat_desc">Kendi sayılarını gir veya 500-2000 sayı ile performansı incele.</div>
             </div>
             <div class="mode-card" onclick="selectMode('evaluator')">
                 <div class="mode-icon">🧪</div>
-                <div class="mode-title">Evo & Checker Modu</div>
-                <div class="mode-desc">GitHub'dan kod çek, 100/500 sayıyla dene, OS checker ve stres testleriyle kodu patlat.</div>
+                <div class="mode-title" data-i18n="mode_eval_title">Evo & Checker Modu</div>
+                <div class="mode-desc" data-i18n="mode_eval_desc">GitHub veya ZIP ile kod yükle, farklı zorluk derecelerinde algoritmayı patlatmayı dene.</div>
             </div>
         </div>
     </div>
 
-    <!-- Üst Başlık -->
+    <!-- Üst Başlık (Header) -->
     <header>
         <div class="header-left">
             <div class="logo" onclick="handleHomeNavigation()">42 PUSH_SWAP</div>
             <button id="home-btn" class="nav-btn" onclick="handleHomeNavigation()">
-                🏠 Menü
+                🏠 <span data-i18n="nav_menu">Menü</span>
             </button>
             <button class="nav-btn" onclick="UI.toggleModal('guide-modal', true)">
-                📖 Kılavuz
+                📖 <span data-i18n="nav_guide">Kılavuz</span>
             </button>
             <button class="nav-btn" onclick="openLeaderboardModal()">
-                🏆 Skorlar
+                🏆 <span data-i18n="nav_scores">Skorlar</span>
+            </button>
+            <!-- Dil Değiştirici -->
+            <button class="nav-btn" onclick="toggleLanguage()" id="lang-toggle-btn" style="color:var(--accent-yellow); font-weight:bold;">
+                🌐 EN
             </button>
         </div>
         <div class="header-right">
             <div class="badge-box" onclick="promptChangeName()">
-                <span class="badge-title">Oyuncu (Değiştir)</span>
-                <span id="player-name" class="badge-value">student42</span>
+                <span class="badge-title" data-i18n="badge_player">Oyuncu</span>
+                <span id="player-name" class="badge-value">cadet42</span>
             </div>
-            <div class="badge-box" id="timer-box">
-                <span class="badge-title">Kalan Süre</span>
+            <div class="badge-box" id="hint-box" style="display: none;">
+                <span class="badge-title" data-i18n="badge_hints">İpucu</span>
+                <span id="hint-indicator" class="badge-value" style="color: #38bdf8;">💡 3</span>
+            </div>
+            <div class="badge-box" id="timer-box" style="display: none;">
+                <span class="badge-title" data-i18n="badge_timer">Kalan Süre</span>
                 <span id="timer-indicator" class="badge-value badge-timer">25:00</span>
             </div>
             <div class="badge-box">
-                <span class="badge-title">Seviye</span>
+                <span class="badge-title" data-i18n="badge_level">Seviye</span>
                 <span id="level-indicator" class="badge-value">1 / 13</span>
             </div>
             <div class="badge-box">
-                <span class="badge-title">Puan</span>
+                <span class="badge-title" data-i18n="badge_score">Puan</span>
                 <span id="score-indicator" class="badge-value badge-score">0</span>
             </div>
         </div>
@@ -120,23 +145,25 @@
     <div class="workspace">
         <div class="stage">
             <div class="stage-header">
-                <span id="stage-mode-label">Görsel Yığın Durumu</span>
+                <span id="stage-mode-label" data-i18n="stage_visual_title">Görsel Yığın Durumu</span>
 
+                <!-- Antrenman Seçenekleri -->
                 <div id="practice-controller" class="practice-config" style="display: none;">
-                    <span>Sayı Adedi:</span>
+                    <span data-i18n="lbl_count">Sayı Adedi:</span>
                     <select id="practice-count-select" onchange="changePracticeCount(this.value)" style="background:#1a1c29; color:#fff; border:1px solid #3b4261; border-radius:4px; padding:2px 6px;">
-                        <option value="3">3 Sayı</option>
-                        <option value="4">4 Sayı</option>
-                        <option value="5" selected>5 Sayı</option>
-                        <option value="6">6 Sayı</option>
-                        <option value="8">8 Sayı</option>
-                        <option value="10">10 Sayı</option>
-                        <option value="15">15 Sayı</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5" selected>5</option>
+                        <option value="6">6</option>
+                        <option value="8">8</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
                     </select>
                 </div>
 
+                <!-- Cerat Seçenekleri -->
                 <div id="cerat-controller" class="cerat-config" style="display: none;">
-                    <button class="cerat-btn" onclick="promptCustomInput()">✏️ Sayı Gir</button>
+                    <button class="cerat-btn" onclick="promptCustomInput()" data-i18n="btn_custom_input">✏️ Sayı Gir</button>
                     <span>Rastgele:</span>
                     <button class="cerat-btn" onclick="loadCeratRandom(500)">500</button>
                     <button class="cerat-btn" onclick="loadCeratRandom(1000)">1000</button>
@@ -144,16 +171,23 @@
                     <button class="cerat-btn" onclick="loadCeratRandom(2000)">2000</button>
                 </div>
 
-                <!-- EVO MODU CHECKER, TEST & SAYI KONTROLLERİ -->
+                <!-- EVO MODU KONTROLLERİ & ENTROPİ SEÇİCİ -->
                 <div id="eval-controller" class="cerat-config" style="display: none; gap: 6px; flex-wrap: wrap;">
-                    <button class="cerat-btn active-os" id="btn-os-linux" onclick="setAndRunChecker('linux')">🐧 Linux Checker</button>
-                    <button class="cerat-btn" id="btn-os-mac" onclick="setAndRunChecker('mac')">🍎 macOS Checker</button>
-                    <button class="cerat-btn" id="btn-os-win" onclick="setAndRunChecker('win')">🪟 Windows Checker</button>
-                    <span>Dene:</span>
-                    <button class="cerat-btn" onclick="loadEvalRandom(100)">100 Sayı</button>
-                    <button class="cerat-btn" onclick="loadEvalRandom(500)">500 Sayı</button>
-                    <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()">💥 Kodu Patlat</button>
-                    <button class="cerat-btn" style="background:#475569; color:#fff;" onclick="resetEvalMode()">🔄 Sayfayı Sıfırla</button>
+                    <button class="cerat-btn active-os" id="btn-os-linux" onclick="setAndRunChecker('linux')">🐧 Linux</button>
+                    <button class="cerat-btn" id="btn-os-mac" onclick="setAndRunChecker('mac')">🍎 macOS</button>
+                    <button class="cerat-btn" id="btn-os-win" onclick="setAndRunChecker('win')">🪟 Windows</button>
+
+                    <span style="border-left:1px solid #3b4261; padding-left:4px;" data-i18n="lbl_entropy">Zorluk:</span>
+                    <select id="eval-difficulty-select" style="background:#141724; color:#38bdf8; border:1px solid #3b4261; border-radius:4px; padding:2px 4px; font-size:11px; font-weight:bold;">
+                        <option value="random" selected>🟡 Rastgele (Standart)</option>
+                        <option value="nearly">🟢 Az Karışık (Hafif)</option>
+                        <option value="worst">🔴 Worst-Case (Ters Dizi)</option>
+                    </select>
+
+                    <button class="cerat-btn" onclick="loadEvalWithSelectedDifficulty(100)">100 Sayı</button>
+                    <button class="cerat-btn" onclick="loadEvalWithSelectedDifficulty(500)">500 Sayı</button>
+                    <button class="cerat-btn" style="background:#b91c1c; color:#fff;" onclick="runEvoStressTest()" data-i18n="btn_break_code">💥 Kodu Patlat</button>
+                    <button class="cerat-btn" style="background:#475569; color:#fff;" onclick="resetEvalMode()">🔄 Sıfırla</button>
                 </div>
 
                 <span id="live-step-tracker" style="color: var(--accent-blue);">Canlı Adım: Bekleniyor</span>
@@ -178,57 +212,67 @@
 
             <div class="builder-panel">
                 <div class="panel-header-sub">
-                    <span>İŞLEM SIRASI & ÖZETİ</span>
-                    <span style="font-size: 11px;">Kullanım İstatistikleri</span>
+                    <span data-i18n="panel_pipeline_title">İŞLEM SIRASI & ÖZETİ</span>
+                    <span style="font-size: 11px;" data-i18n="panel_stats_title">Kullanım İstatistikleri</span>
                 </div>
                 <div class="pipeline-zone" id="pipeline" ondragover="allowDrop(event)" ondrop="handleDrop(event)"></div>
 
                 <div class="control-bar">
                     <div class="benchmark-info">
-                        Hamle: <span id="user-moves-count">0</span> |
-                        Hedef (42 Baremi): <span id="best-moves-count">0</span>
+                        <span data-i18n="lbl_moves">Hamle</span>: <span id="user-moves-count">0</span> |
+                        <span data-i18n="lbl_target">Hedef</span>: <span id="best-moves-count">0</span>
                     </div>
                     <div class="actions-group">
-                        <button class="btn btn-clear" onclick="resetCurrentPipeline()">Temizle</button>
-                        <button id="solve-cerat-btn" class="btn btn-pause" onclick="autoSolveCerat()" style="display: none; background:#2a3a5e; color:#00d2ff;">Oto-Çöz (Optimize)</button>
-                        <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;">Durdur</button>
-                        <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;">Yeniden Başlat</button>
-                        <button id="eval-paste-btn" class="btn btn-pause" onclick="evalRunPastedCommands()" style="display: none; background:#3b4261; color:#00d2ff;">Komutları Çalıştır</button>
-                        <button class="btn btn-run" onclick="executeUserPipeline()">Simüle Et & Doğrula</button>
+                        <button class="btn btn-clear" onclick="resetCurrentPipeline()" data-i18n="btn_clear">Temizle</button>
+                        <button id="hint-btn" class="btn btn-pause" onclick="useHint()" style="display: none; background:#0369a1; color:#fff;" data-i18n="btn_hint">💡 İpucu Al</button>
+                        <button id="pause-btn" class="btn btn-pause" onclick="togglePauseComp()" style="display: none;" data-i18n="btn_pause">Durdur</button>
+                        <button id="restart-btn" class="btn btn-restart" onclick="restartCompetition()" style="display: none;" data-i18n="btn_restart">Yeniden Başlat</button>
+                        <button class="btn btn-run" onclick="executeUserPipeline()" data-i18n="btn_simulate">Simüle Et & Doğrula</button>
                     </div>
                 </div>
             </div>
 
             <div class="terminal-panel">
-                <!-- GITHUB REPO ÇEKME ALANI -->
-                <div id="github-bar" style="display: none; gap: 6px; padding: 4px 0 8px 0; border-bottom: 1px solid #1e2436; margin-bottom: 6px;">
-                    <input type="text" id="github-repo-input" placeholder="GitHub Repo URL (örn: github.com/user/push_swap)" style="flex:1; background:#141724; border:1px solid var(--border-color); border-radius:6px; color:#fff; font-size:11px; padding:4px 8px; outline:none;">
-                    <button class="cerat-btn" onclick="fetchGithubRepo()" style="background:#0284c7; color:#fff;">Kodu Çek</button>
+                <!-- GITHUB REPO & ZIP YÜKLEME ÇUBUĞU -->
+                <div id="github-bar" style="display: none; gap: 6px; padding: 4px 0 8px 0; border-bottom: 1px solid #1e2436; margin-bottom: 6px; flex-wrap: wrap;">
+                    <input type="text" id="github-repo-input" placeholder="GitHub Repo URL (örn: github.com/cadet/push_swap)" style="flex:1; min-width: 140px; background:#141724; border:1px solid var(--border-color); border-radius:6px; color:#fff; font-size:11px; padding:4px 8px; outline:none;">
+                    <button class="cerat-btn" onclick="fetchGithubRepo()" style="background:#0284c7; color:#fff;" data-i18n="btn_pull_code">Kodu Çek</button>
+
+                    <!-- ZIP Dosyası Seçici -->
+                    <input type="file" id="zip-file-input" accept=".zip" style="display: none;" onchange="handleZipFileUpload(event)">
+                    <button class="cerat-btn" onclick="document.getElementById('zip-file-input').click()" style="background:#059669; color:#fff;" data-i18n="btn_upload_zip">📁 ZIP Yükle</button>
                 </div>
 
                 <div class="terminal-tabs">
-                    <button id="tab-c-btn" class="term-tab-btn active" onclick="switchTerminalTab('c')">C Kaynak Kodu</button>
-                    <button id="tab-bin-btn" class="term-tab-btn" onclick="switchTerminalTab('binary')">Binary (Radix)</button>
-                    <button id="tab-report-btn" class="term-tab-btn" onclick="switchTerminalTab('report')" style="display:none;">🧪 Test Raporu</button>
+                    <button id="tab-c-btn" class="term-tab-btn active" onclick="switchTerminalTab('c')" data-i18n="tab_c_code">C Kaynak Kodu</button>
+                    <button id="tab-bin-btn" class="term-tab-btn" onclick="switchTerminalTab('binary')" data-i18n="tab_binary">Binary (Radix)</button>
+                    <button id="tab-report-btn" class="term-tab-btn" onclick="switchTerminalTab('report')" style="display:none;" data-i18n="tab_test_report">🧪 Test Raporu</button>
                 </div>
                 <div class="terminal-body" id="terminal-view"></div>
             </div>
         </div>
     </div>
 
-    <!-- Skor Modalı -->
-    <div id="leaderboard-modal" class="modal-overlay">
+    <!-- ONLINE SKOR VE KAMPÜS SAVAŞLARI MODALI -->
+    <div id="leaderboard-modal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
             <button class="modal-close" onclick="UI.toggleModal('leaderboard-modal', false)">✕</button>
-            <div class="modal-title">🏆 En Yüksek Skorlar</div>
+            <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span data-i18n="leaderboard_title">🏆 Liderlik Tablosu</span>
+                <div style="display:flex; gap:6px;">
+                    <button class="cerat-btn active-os" id="lb-tab-cadets" onclick="switchLeaderboardTab('cadets')" data-i18n="lb_tab_cadets">Öğrenciler</button>
+                    <button class="cerat-btn" id="lb-tab-campuses" onclick="switchLeaderboardTab('campuses')" data-i18n="lb_tab_campuses">Kampüs Lig Tablosu</button>
+                </div>
+            </div>
             <div class="modal-content">
                 <table class="score-table">
-                    <thead>
+                    <thead id="leaderboard-head">
                         <tr>
-                            <th>Sıra</th>
-                            <th>Öğrenci</th>
-                            <th>Skor</th>
-                            <th>Tarih</th>
+                            <th>#</th>
+                            <th data-i18n="th_cadet">Öğrenci</th>
+                            <th data-i18n="th_campus">Kampüs</th>
+                            <th data-i18n="th_score">Skor</th>
+                            <th data-i18n="th_date">Tarih</th>
                         </tr>
                     </thead>
                     <tbody id="leaderboard-body"></tbody>

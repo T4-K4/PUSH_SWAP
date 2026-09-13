@@ -1,4 +1,32 @@
 const UI = {
+    // Çoklu Dil Motoru (DOM'daki tüm [data-i18n] etiketlerini çevirir)
+    applyTranslations() {
+        const lang = AppState.currentLang;
+        const dict = I18N[lang] || I18N['tr'];
+
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (dict[key]) {
+                el.innerHTML = dict[key];
+            }
+        });
+
+        // Input placeholder'ları güncelle
+        const loginInput = document.getElementById('login-input-field');
+        if (loginInput && dict['login_placeholder']) {
+            loginInput.placeholder = dict['login_placeholder'];
+        }
+
+        // Dil butonunun üstündeki yazıyı güncelle
+        const langBtn = document.getElementById('lang-toggle-btn');
+        if (langBtn) {
+            langBtn.innerText = lang === 'tr' ? '🌐 EN' : '🌐 TR';
+        }
+
+        // Komutlar panelini yeni dilde tekrar çiz
+        this.renderCommandsPanel();
+    },
+
     renderStacks(a, b) {
         const boxA = document.getElementById('stack-a-balls');
         const boxB = document.getElementById('stack-b-balls');
@@ -15,8 +43,8 @@ const UI = {
             textA.style.display = 'block';
             textB.style.display = 'block';
 
-            textA.innerText = `[${a.length} Eleman]\n` + a.slice(0, 60).join(', ') + (a.length > 60 ? ' ...' : '');
-            textB.innerText = `[${b.length} Eleman]\n` + (b.length > 0 ? (b.slice(0, 60).join(', ') + (b.length > 60 ? ' ...' : '')) : '(Boş)');
+            textA.innerText = `[${a.length} Eleman / Items]\n` + a.slice(0, 60).join(', ') + (a.length > 60 ? ' ...' : '');
+            textB.innerText = `[${b.length} Eleman / Items]\n` + (b.length > 0 ? (b.slice(0, 60).join(', ') + (b.length > 60 ? ' ...' : '')) : '(Boş / Empty)');
         } else {
             boxA.style.display = 'flex';
             boxB.style.display = 'flex';
@@ -87,8 +115,12 @@ const UI = {
     renderCommandsPanel() {
         const panel = document.getElementById('cmd-source-list');
         if (!panel) return;
-        panel.innerHTML = '<div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 2px;">KOMUTLAR (Tıkla veya Sürükle)</div>';
+        const lang = AppState.currentLang;
+        const headerTitle = lang === 'tr' ? 'KOMUTLAR (Tıkla veya Sürükle)' : 'OPERATIONS (Click or Drag)';
+
+        panel.innerHTML = `<div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 2px;">${headerTitle}</div>`;
         COMMANDS.forEach(item => {
+            const desc = lang === 'tr' ? item.desc_tr : item.desc_en;
             const card = document.createElement('div');
             card.className = 'command-card';
             card.draggable = true;
@@ -97,7 +129,7 @@ const UI = {
 
             card.innerHTML = `
                 <span class="cmd-tag">${item.cmd}</span>
-                <span class="cmd-desc">${item.desc}</span>
+                <span class="cmd-desc">${desc}</span>
             `;
             panel.appendChild(card);
         });
@@ -129,7 +161,7 @@ const UI = {
             terminal.scrollTop = 0;
         } else if (tab === 'report') {
             if (!AppState.lastTestReport || AppState.lastTestReport.length === 0) {
-                terminal.innerHTML = '<div style="color:var(--text-muted); padding:10px;">Henüz test çalıştırılmadı. "Kodu Patlatmayı Dene" butonuna basın.</div>';
+                terminal.innerHTML = '<div style="color:var(--text-muted); padding:10px;">Henüz test çalıştırılmadı. "Kodu Patlat" butonuna basın.</div>';
                 return;
             }
 
@@ -162,6 +194,99 @@ const UI = {
         }
     },
 
+    // Bireysel ve Kampüs Savaşları Liderlik Tablosu Render Motoru
+    renderLeaderboard(data, tab = 'cadets') {
+        const thead = document.getElementById('leaderboard-head');
+        const tbody = document.getElementById('leaderboard-body');
+        if (!tbody || !thead) return;
+        tbody.innerHTML = '';
+
+        const lang = AppState.currentLang;
+        const dict = I18N[lang] || I18N['tr'];
+
+        if (tab === 'cadets') {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>${dict.th_cadet}</th>
+                    <th>${dict.th_campus}</th>
+                    <th>${dict.th_score}</th>
+                    <th>${dict.th_date}</th>
+                </tr>
+            `;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#64748b; padding:15px;">Henüz kayıtlı skor bulunmuyor.</td></tr>';
+                return;
+            }
+
+            data.slice(0, 25).forEach((item, index) => {
+                let rankIcon = index + 1;
+                if (index === 0) rankIcon = '🥇 1';
+                else if (index === 1) rankIcon = '🥈 2';
+                else if (index === 2) rankIcon = '🥉 3';
+
+                const isMe = item.name.toLowerCase() === AppState.playerName.toLowerCase();
+                const row = document.createElement('tr');
+                if (isMe) row.style.background = 'rgba(0, 210, 255, 0.08)';
+
+                row.innerHTML = `
+                    <td style="font-weight:bold; color:${index < 3 ? 'var(--accent-yellow)' : 'var(--text-muted)'};">${rankIcon}</td>
+                    <td style="font-weight:${isMe ? '900' : 'normal'}; color:${isMe ? 'var(--accent-blue)' : '#fff'};">${item.name} ${isMe ? '(Sen)' : ''}</td>
+                    <td><span style="background:#23283c; padding:2px 6px; border-radius:4px; font-size:11px; color:#38bdf8;">${item.campus || '42 Istanbul'}</span></td>
+                    <td style="font-weight:bold; color:var(--accent-green);">${item.score}</td>
+                    <td style="color:var(--text-muted); font-size:11px;">${item.date}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else if (tab === 'campuses') {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>${dict.th_campus}</th>
+                    <th>Toplam Skor</th>
+                    <th>Aktif Cadet</th>
+                </tr>
+            `;
+
+            // Kampüs skorlarını agrege et
+            const campusStats = {};
+            data.forEach(item => {
+                const c = item.campus || 'Other';
+                if (!campusStats[c]) campusStats[c] = { score: 0, count: 0 };
+                campusStats[c].score += item.score;
+                campusStats[c].count += 1;
+            });
+
+            const sortedCampuses = Object.keys(campusStats).map(c => ({
+                campus: c,
+                score: campusStats[c].score,
+                count: campusStats[c].count
+            })).sort((a, b) => b.score - a.score);
+
+            if (sortedCampuses.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:15px;">Henüz kampüs verisi bulunmuyor.</td></tr>';
+                return;
+            }
+
+            sortedCampuses.forEach((item, index) => {
+                let rankIcon = index + 1;
+                if (index === 0) rankIcon = '🏆 1';
+                else if (index === 1) rankIcon = '🥈 2';
+                else if (index === 2) rankIcon = '🥉 3';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="font-weight:bold; color:var(--accent-yellow);">${rankIcon}</td>
+                    <td style="font-weight:bold; color:#fff;">${item.campus}</td>
+                    <td style="font-weight:bold; color:var(--accent-green);">${item.score.toLocaleString()}</td>
+                    <td style="color:#38bdf8;">${item.count} Cadet</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    },
+
     toggleModal(id, show) {
         const modal = document.getElementById(id);
         if (modal) {
@@ -169,7 +294,7 @@ const UI = {
         }
     },
 
-    showToast(msg, type) {
+    showToast(msg, type = "warn") {
         const old = document.querySelector('.toast');
         if (old) old.remove();
         const t = document.createElement('div');
