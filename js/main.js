@@ -27,7 +27,6 @@ function toggleLanguage() {
     AppState.currentLang = AppState.currentLang === 'tr' ? 'en' : 'tr';
     localStorage.setItem('ps_lang', AppState.currentLang);
     UI.applyTranslations();
-    UI.renderTerminal(AppState.activeTab, AppState.initialStack);
 }
 
 // --- GİRİŞ VE KAMPÜS SEÇİMİ (YARIŞMA MODU) ---
@@ -86,11 +85,29 @@ function promptChangeName() {
     }
 }
 
+// Butonları ve Etkileşimi Kilitleme/Açma (Race Condition Önleyici)
+function setControlsLocked(locked) {
+    const targets = document.querySelectorAll('.command-card, .btn-run, .btn-clear, #hint-btn, .pipeline-chip');
+    targets.forEach(el => {
+        el.style.pointerEvents = locked ? 'none' : 'auto';
+        el.style.opacity = locked ? '0.6' : '1';
+    });
+}
+
 // --- MOD SEÇİMİ VE GÖRÜNÜM DÜZENİ ---
 function selectMode(mode) {
     AppState.gameMode = mode;
     const modeModal = document.getElementById('mode-modal');
     if (modeModal) modeModal.style.display = 'none';
+
+    // Mod değişiminde eski verilerin (antrenman vb.) yarışmaya taşınmasını KESİN ENGELLE
+    AppState.initialStack = [];
+    AppState.stackA = [];
+    AppState.stackB = [];
+    AppState.userPipeline = [];
+    AppState.isSimulating = false;
+    UI.renderPipeline([]);
+    UI.renderStacks([], []);
 
     const setDisplay = (id, val) => {
         const el = document.getElementById(id);
@@ -121,13 +138,13 @@ function selectMode(mode) {
         updateHintsUI();
         updateScoreUI();
         startCompetitionTimer();
-        startCompetitionSession(); // Sunucu oturumunu başlatır
+        startCompetitionSession();
     } else if (AppState.gameMode === 'practice') {
         clearInterval(AppState.timerInterval);
         const lbl = document.getElementById('stage-mode-label');
         if (lbl) lbl.innerText = AppState.currentLang === 'tr' ? "Serbest Antrenman Modu" : "Free Practice Mode";
         const ind = document.getElementById('level-indicator');
-        if (ind) ind.innerText = "Serbest";
+        if (ind) ind.innerText = AppState.currentLang === 'tr' ? "Serbest" : "Practice";
         AppState.score = 0;
         updateScoreUI();
         loadPracticeLevel(5);
@@ -155,7 +172,10 @@ function selectMode(mode) {
 
 function handleHomeNavigation() {
     if (AppState.gameMode === 'compete') {
-        if (confirm(AppState.currentLang === 'tr' ? "Yarışmadan çıkmak istediğinize emin misiniz? Puanınız sıfırlanır." : "Are you sure you want to exit? Your progress will reset.")) {
+        const confirmMsg = AppState.currentLang === 'tr'
+            ? "Yarışmadan çıkmak istediğinize emin misiniz? Puanınız sıfırlanır."
+            : "Are you sure you want to exit? Your progress will reset.";
+        if (confirm(confirmMsg)) {
             clearInterval(AppState.timerInterval);
             const modeModal = document.getElementById('mode-modal');
             if (modeModal) modeModal.style.display = 'flex';
@@ -166,15 +186,24 @@ function handleHomeNavigation() {
     }
 }
 
-// --- SUNUCU DOĞRULAMALI YARIŞMA OTURUMU ---
+// --- SUNUCU DOĞRULAMALI YARIŞMA OTURUMU & KESİNTİSİZ BAŞLATMA ---
 async function startCompetitionSession() {
-    UI.showToast(AppState.currentLang === 'tr' ? "Yarışma sunucusuna bağlanılıyor..." : "Connecting to server...", "warn");
+    setControlsLocked(true);
+    const tracker = document.getElementById('live-step-tracker');
+    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Oturum Başlatılıyor..." : "Initializing Session...";
+
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
         const res = await fetch(`${BACKEND_URL}/start-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: AppState.playerName, campus: AppState.playerCampus })
+            body: JSON.stringify({ name: AppState.playerName, campus: AppState.playerCampus }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
+
         const data = await res.json();
         if (data.success) {
             AppState.sessionId = data.sessionId;
@@ -182,10 +211,24 @@ async function startCompetitionSession() {
             AppState.completedSolutions = [];
             loadServerLevel(1);
         } else {
-            alert(`Hata: ${data.error}`);
+            throw new Error(data.error);
         }
     } catch (e) {
-        alert("Yarışma sunucusuna ulaşılamadı! Render uyanıyor olabilir.");
+        // Fallback: Acil Durum Yerel Seviyeleri (Render uykudaysa oyun asla kilitlenmez)
+        AppState.serverLevels = [];
+        for (let lvl = 1; lvl <= AppState.maxLevel; lvl++) {
+            const count = lvl + 2;
+            AppState.serverLevels.push({
+                level: lvl,
+                count,
+                numbers: Engine.generateRandomArray(count),
+                targetOps: Solver.calculateTargetOps(count)
+            });
+        }
+        AppState.completedSolutions = [];
+        loadServerLevel(1);
+    } finally {
+        setControlsLocked(false);
     }
 }
 
@@ -221,13 +264,8 @@ function updateHintsUI() {
 
     const hintBtn = document.getElementById('hint-btn');
     if (hintBtn) {
-        if (AppState.hintsLeft <= 0) {
-            hintBtn.style.opacity = "0.5";
-            hintBtn.style.cursor = "not-allowed";
-        } else {
-            hintBtn.style.opacity = "1";
-            hintBtn.style.cursor = "pointer";
-        }
+        hintBtn.style.opacity = AppState.hintsLeft <= 0 ? "0.5" : "1";
+        hintBtn.style.cursor = AppState.hintsLeft <= 0 ? "not-allowed" : "pointer";
     }
 }
 
@@ -251,7 +289,6 @@ function useHint() {
 
     AppState.hintsLeft--;
     updateHintsUI();
-
     addCommandToPipeline(nextOp);
 
     const msg = I18N[AppState.currentLang].toast_hint_used
@@ -260,7 +297,7 @@ function useHint() {
     UI.showToast(msg, "success");
 }
 
-// --- SEVİYE & YARIŞMA AKIŞI ---
+// --- SEVİYE & YARIŞMA DEĞERLENDİRMESİ ---
 function evaluateResult() {
     const isSorted = Engine.isSorted(AppState.stackA, AppState.stackB);
     const steps = AppState.userPipeline.length;
@@ -280,20 +317,20 @@ function evaluateResult() {
         return;
     }
 
-    // Geçici istemci puanı gösterimi
+    // Puanlama ve bildirim
     if (steps < AppState.optimalSolutionLength) {
         AppState.score += 200;
-        UI.showToast(`Efsanevi! Hedefin altında tamamladın. +200 Puan!`, "success");
+        UI.showToast(AppState.currentLang === 'tr' ? "Efsanevi! Hedefin altında tamamladın (+200 Puan)" : "Legendary! Beat benchmark (+200 Pts)", "success");
     } else if (steps === AppState.optimalSolutionLength) {
         AppState.score += 100;
-        UI.showToast(`Kusursuz! İdeal çözüm. +100 Puan!`, "success");
+        UI.showToast(AppState.currentLang === 'tr' ? "Kusursuz! İdeal çözüm (+100 Puan)" : "Flawless! Matched target (+100 Pts)", "success");
     } else {
         AppState.score += 50;
-        UI.showToast(`Sıralandı ancak hedeften uzun sürdü (+50 Puan)`, "warn");
+        UI.showToast(AppState.currentLang === 'tr' ? "Sıralandı ancak hedeften uzun sürdü (+50 Puan)" : "Sorted above target (+50 Pts)", "warn");
     }
     updateScoreUI();
 
-    // Bu seviyenin çözümünü listeye kaydet
+    // Bu seviyenin çözümünü kaydet
     AppState.completedSolutions.push({
         level: AppState.currentLevel,
         ops: [...AppState.userPipeline]
@@ -302,7 +339,6 @@ function evaluateResult() {
     if (AppState.currentLevel < AppState.maxLevel) {
         AppState.currentLevel++;
 
-        // Bonus ipucu kontrolleri
         if ([7, 9, 11, 13].includes(AppState.currentLevel)) {
             AppState.hintsLeft++;
             updateHintsUI();
@@ -318,6 +354,13 @@ function evaluateResult() {
 
 async function submitFinalSolutionsToBackend() {
     UI.showToast(AppState.currentLang === 'tr' ? "Skorunuz sunucuda doğrulanıyor..." : "Verifying score on server...", "warn");
+
+    if (!AppState.sessionId) {
+        UI.triggerConfetti();
+        alert(`🎉 TEBRİKLER! 13 seviyenin tamamını başarıyla bitirdiniz!\nToplam Skor: ${AppState.score}`);
+        return;
+    }
+
     try {
         const res = await fetch(`${BACKEND_URL}/verify-and-submit`, {
             method: 'POST',
@@ -335,7 +378,7 @@ async function submitFinalSolutionsToBackend() {
             UI.triggerConfetti();
             alert(`🎉 TEBRİKLER! Sunucu Onaylı Resmi Skorunuz: ${data.finalScore}\n(Doğrulanan Seviye: ${data.verifiedLevels}/13)`);
         } else {
-            alert(`Doğrulama Başarısız: ${data.error}`);
+            alert(`Doğrulama Hatası: ${data.error}`);
         }
     } catch (e) {
         alert("Doğrulama sunucusuna bağlanılamadı!");
@@ -379,12 +422,21 @@ function updateTimerDisplay() {
 function togglePauseComp() {
     AppState.isPaused = !AppState.isPaused;
     const pauseBtn = document.getElementById('pause-btn');
-    if (pauseBtn) pauseBtn.innerText = AppState.isPaused ? (AppState.currentLang === 'tr' ? "Devam Et" : "Resume") : (AppState.currentLang === 'tr' ? "Durdur" : "Pause");
-    UI.showToast(AppState.isPaused ? "Durduruldu" : "Devam ediyor", "warn");
+    if (pauseBtn) {
+        pauseBtn.innerText = AppState.isPaused
+            ? (AppState.currentLang === 'tr' ? "Devam Et" : "Resume")
+            : (AppState.currentLang === 'tr' ? "Durdur" : "Pause");
+    }
+    UI.showToast(AppState.isPaused
+        ? (AppState.currentLang === 'tr' ? "Durduruldu" : "Paused")
+        : (AppState.currentLang === 'tr' ? "Devam ediyor" : "Resumed"), "warn");
 }
 
 function restartCompetition() {
-    if (confirm("Yarışmayı baştan başlatmak istediğinize emin misiniz? Puanınız sıfırlanacaktır.")) {
+    const confirmMsg = AppState.currentLang === 'tr'
+        ? "Yarışmayı baştan başlatmak istediğinize emin misiniz? Puanınız sıfırlanacaktır."
+        : "Are you sure you want to restart? Score will be reset.";
+    if (confirm(confirmMsg)) {
         AppState.score = 0;
         AppState.hintsLeft = 3;
         updateHintsUI();
@@ -395,7 +447,7 @@ function restartCompetition() {
 }
 
 function finishCompetitionTime() {
-    alert(`SÜRE DOLDU!\nTamamlanan seviyeler sunucuya gönderiliyor...`);
+    alert(AppState.currentLang === 'tr' ? "SÜRE DOLDU! Tamamlanan seviyeler sunucuya iletiliyor..." : "TIME EXPIRED! Submitting completed levels...");
     submitFinalSolutionsToBackend();
 }
 
@@ -413,7 +465,7 @@ function loadPracticeLevel(count) {
     const best = document.getElementById('best-moves-count');
     if (best) best.innerText = AppState.optimalSolutionLength;
     const tracker = document.getElementById('live-step-tracker');
-    if (tracker) tracker.innerText = "Canlı Adım: Hazır";
+    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Canlı Adım: Hazır" : "Live Step: Ready";
 
     UI.renderStacks(AppState.stackA, AppState.stackB);
     UI.renderTerminal(AppState.activeTab, AppState.initialStack);
@@ -435,12 +487,15 @@ function loadCeratRandom(count) {
 }
 
 function promptCustomInput() {
-    const input = prompt("Sayıları aralarında boşluk bırakarak girin:", "45 12 88 3 19 6");
+    const promptMsg = AppState.currentLang === 'tr'
+        ? "Sayıları aralarında boşluk bırakarak girin:"
+        : "Enter numbers separated by spaces:";
+    const input = prompt(promptMsg, "45 12 88 3 19 6");
     if (!input) return;
     const parts = input.split(/[\s,]+/).filter(x => x.trim() !== "");
     const parsed = parts.map(Number);
     if (parsed.some(isNaN) || new Set(parsed).size !== parsed.length || parsed.length < 2) {
-        alert("Geçersiz veya mükerrer sayı girişi!");
+        alert(AppState.currentLang === 'tr' ? "Geçersiz veya mükerrer sayı girişi!" : "Invalid or duplicate numbers!");
         return;
     }
     AppState.initialStack = [...parsed];
@@ -482,31 +537,39 @@ function resetCurrentPipeline() {
     AppState.stackB = [];
     UI.renderStacks(AppState.stackA, AppState.stackB);
     const tracker = document.getElementById('live-step-tracker');
-    if (tracker) tracker.innerText = "Canlı Adım: Sıfırlandı";
+    if (tracker) tracker.innerText = AppState.currentLang === 'tr' ? "Canlı Adım: Sıfırlandı" : "Live Step: Reset";
 }
 
+// Korumalı Yürütme Motoru (Tıklama Spam'ına Karşı Kilitli)
 async function executeUserPipeline() {
     if (AppState.isSimulating || AppState.userPipeline.length === 0 || (AppState.gameMode === 'compete' && AppState.isPaused)) return;
+
     AppState.isSimulating = true;
+    setControlsLocked(true);
 
     AppState.stackA = [...AppState.initialStack];
     AppState.stackB = [];
     UI.renderStacks(AppState.stackA, AppState.stackB);
 
-    const speed = AppState.userPipeline.length > 100 ? 1 : 180;
-    const stepSkip = AppState.userPipeline.length > 100 ? 50 : 1;
+    const speed = AppState.userPipeline.length > 100 ? 1 : 160;
+    const stepSkip = AppState.userPipeline.length > 100 ? 40 : 1;
 
-    for (let i = 0; i < AppState.userPipeline.length; i++) {
-        Engine.applyOp(AppState.userPipeline[i], AppState.stackA, AppState.stackB);
-        if (i % stepSkip === 0 || i === AppState.userPipeline.length - 1) {
-            const tracker = document.getElementById('live-step-tracker');
-            if (tracker) tracker.innerText = `Adım: ${i + 1}/${AppState.userPipeline.length} (${AppState.userPipeline[i]})`;
-            UI.renderStacks(AppState.stackA, AppState.stackB);
-            await new Promise(r => setTimeout(r, speed));
+    try {
+        for (let i = 0; i < AppState.userPipeline.length; i++) {
+            Engine.applyOp(AppState.userPipeline[i], AppState.stackA, AppState.stackB);
+            if (i % stepSkip === 0 || i === AppState.userPipeline.length - 1) {
+                const tracker = document.getElementById('live-step-tracker');
+                const stepLabel = AppState.currentLang === 'tr' ? "Adım" : "Step";
+                if (tracker) tracker.innerText = `${stepLabel}: ${i + 1}/${AppState.userPipeline.length} (${AppState.userPipeline[i]})`;
+                UI.renderStacks(AppState.stackA, AppState.stackB);
+                await new Promise(r => setTimeout(r, speed));
+            }
         }
+    } finally {
+        AppState.isSimulating = false;
+        setControlsLocked(false);
     }
 
-    AppState.isSimulating = false;
     if (AppState.gameMode !== 'evaluator') {
         evaluateResult();
     }
@@ -536,7 +599,7 @@ function setCheckerOS(os) {
 
 // --- EVO CHECKER & DERLEME ENTEGRASYONLARI (GITHUB + ZIP) ---
 async function fetchGithubRepo() {
-    const input = document.getElementById('github-repo-input').value.trim();
+    const input = document.getElementById('github-repo-input')?.value.trim();
     if (!input) {
         alert("Lütfen bir GitHub repo linki girin!\nÖrnek: https://github.com/cadet/push_swap");
         return;
@@ -608,7 +671,7 @@ function handleZipFileUpload(e) {
     reader.readAsDataURL(file);
 }
 
-// --- ENTROPİ & EVO STRES TESTİ ---
+// --- ENTROPİ & TESTLER ---
 function loadEvalWithSelectedDifficulty(count) {
     const sel = document.getElementById('eval-difficulty-select');
     const difficulty = sel ? sel.value : 'random';
@@ -712,7 +775,7 @@ function resetEvalMode() {
 
     const term = document.getElementById('terminal-view');
     if (term) {
-        term.innerText = `// 42 EVO TEST LABORATUVARI\n// Repo linki girin veya ZIP yükleyip derleyin.`;
+        term.innerText = I18N[AppState.currentLang].term_eval_placeholder;
     }
     const gitInput = document.getElementById('github-repo-input');
     if (gitInput) gitInput.value = "";
@@ -722,6 +785,7 @@ function resetEvalMode() {
     document.getElementById('live-step-tracker').innerText = "Hazır";
 }
 
+// 14 MADDELİK TAM TEŞEKKÜLLÜ 42 EVO STRES TESTİ (Eksiksiz)
 async function runEvoStressTest() {
     const term = document.getElementById('terminal-view');
     if (term) term.contentEditable = "false";
@@ -839,11 +903,10 @@ async function runEvoStressTest() {
     }
 }
 
-// --- GLOBAL LİDERLİK TABLOSU (OKUMA) ---
+// --- GLOBAL LİDERLİK TABLOSU ---
 async function fetchLeaderboardData() {
     const now = Date.now();
-    // 30 saniyelik cache kontrolü
-    if (now - AppState.leaderboardLastFetch < 30000 && AppState.leaderboardCache.length > 0) {
+    if (now - AppState.leaderboardLastFetch < 20000 && AppState.leaderboardCache.length > 0) {
         return AppState.leaderboardCache;
     }
 

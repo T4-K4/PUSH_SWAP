@@ -1,9 +1,9 @@
 // Backend & API Yapılandırması
 const BACKEND_URL = "https://push-swap-mw5i.onrender.com/api";
 
-// Firebase Firestore REST Yapılandırması (Kendi Firebase Project ID'nizi girin)
+// Firebase Firestore REST Yapılandırması
 const FIREBASE_CONFIG = {
-    projectId: "push-swap-trainer-42", // Kendi Firebase Project ID'niz
+    projectId: "push-swap-trainer-42",
     get collectionUrl() {
         return `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/leaderboard`;
     }
@@ -95,7 +95,18 @@ const I18N = {
         toast_no_hints: "İpucu hakkınız kalmadı!",
         toast_bonus_hint: "Tebrikler! Seviye bonusu: +1 İpucu Hakkı kazandınız!",
         toast_zip_uploaded: "ZIP yüklendi ve başarıyla derlendi!",
-        toast_invalid_nick: "Geçersiz 42 intra nicki! Sadece harf, rakam, _ veya - (2-12 karakter)."
+        toast_invalid_nick: "Geçersiz 42 intra nicki! Sadece harf, rakam, _ veya - (2-12 karakter).",
+        term_c_comment: "// 42 Push_swap Referans Operasyonları (Arayüzde çalıştırılan simülasyon kodları)",
+        term_bin_header: "N: {n} | BİT SAYISI: {bits}\n\n",
+        term_bin_more: "... ve {count} sayı daha\n",
+        term_eval_placeholder: "// 42 EVO TEST LABORATUVARI\n// Bir GitHub repo URL'si girin veya .zip kaynak arşivi yükleyip derleyin.",
+        term_report_empty: "Henüz bir test koşturulmadı. 'Kodu Patlat' veya bir sayı adedi seçin.",
+        term_report_header: "[42 {os} CHECKER EVO STRES TEST RAPORU]",
+        th_report_id: "#",
+        th_report_name: "Test Adı",
+        th_report_input: "Denenen Girdi (ARG)",
+        th_report_status: "Durum",
+        th_report_detail: "Detay / Barem"
     },
     en: {
         guide_title: "Push_swap Master Guide",
@@ -166,7 +177,18 @@ const I18N = {
         toast_no_hints: "No hints remaining!",
         toast_bonus_hint: "Congratulations! Level bonus: +1 Hint awarded!",
         toast_zip_uploaded: "ZIP uploaded and compiled successfully!",
-        toast_invalid_nick: "Invalid 42 intra handle! Use 2-12 letters, numbers, _ or -."
+        toast_invalid_nick: "Invalid 42 intra handle! Use 2-12 letters, numbers, _ or -.",
+        term_c_comment: "// 42 Push_swap Reference Operations (Internal simulation routines)",
+        term_bin_header: "N: {n} | TOTAL BITS: {bits}\n\n",
+        term_bin_more: "... and {count} more items\n",
+        term_eval_placeholder: "// 42 EVO TEST LABORATORY\n// Enter a GitHub repository URL or upload a .zip archive to compile and stress-test.",
+        term_report_empty: "No tests executed yet. Click 'Break Code' or pick a stack size.",
+        term_report_header: "[42 {os} CHECKER EVO STRESS TEST REPORT]",
+        th_report_id: "#",
+        th_report_name: "Test Name",
+        th_report_input: "Input Argument (ARG)",
+        th_report_status: "Status",
+        th_report_detail: "Details / Benchmark"
     }
 };
 

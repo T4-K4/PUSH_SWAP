@@ -23,8 +23,9 @@ const UI = {
             langBtn.innerText = lang === 'tr' ? '🌐 EN' : '🌐 TR';
         }
 
-        // Komutlar panelini yeni dilde tekrar çiz
+        // Komutlar panelini ve terminali yeni dilde tekrar çiz
         this.renderCommandsPanel();
+        this.renderTerminal(AppState.activeTab, AppState.initialStack);
     },
 
     renderStacks(a, b) {
@@ -35,7 +36,7 @@ const UI = {
 
         if (!boxA || !boxB || !textA || !textB) return;
 
-        const total = a.length + b.length;
+        const total = (a ? a.length : 0) + (b ? b.length : 0);
 
         if (total > 15) {
             boxA.style.display = 'none';
@@ -43,8 +44,12 @@ const UI = {
             textA.style.display = 'block';
             textB.style.display = 'block';
 
-            textA.innerText = `[${a.length} Eleman / Items]\n` + a.slice(0, 60).join(', ') + (a.length > 60 ? ' ...' : '');
-            textB.innerText = `[${b.length} Eleman / Items]\n` + (b.length > 0 ? (b.slice(0, 60).join(', ') + (b.length > 60 ? ' ...' : '')) : '(Boş / Empty)');
+            const lang = AppState.currentLang;
+            const itemsLabel = lang === 'tr' ? 'Eleman' : 'Items';
+            const emptyLabel = lang === 'tr' ? '(Boş)' : '(Empty)';
+
+            textA.innerText = `[${a.length} ${itemsLabel}]\n` + a.slice(0, 60).join(', ') + (a.length > 60 ? ' ...' : '');
+            textB.innerText = `[${b.length} ${itemsLabel}]\n` + (b.length > 0 ? (b.slice(0, 60).join(', ') + (b.length > 60 ? ' ...' : '')) : emptyLabel);
         } else {
             boxA.style.display = 'flex';
             boxB.style.display = 'flex';
@@ -54,7 +59,12 @@ const UI = {
             boxA.innerHTML = '';
             boxB.innerHTML = '';
 
-            const all = [...a, ...b];
+            const safeA = a || [];
+            const safeB = b || [];
+            const all = [...safeA, ...safeB];
+
+            if (all.length === 0) return;
+
             const min = Math.min(...all);
             const max = Math.max(...all);
 
@@ -70,8 +80,8 @@ const UI = {
                 return d;
             };
 
-            a.forEach((val, i) => boxA.appendChild(makeBall(val, i === 0)));
-            b.forEach((val, i) => boxB.appendChild(makeBall(val, i === 0)));
+            safeA.forEach((val, i) => boxA.appendChild(makeBall(val, i === 0)));
+            safeB.forEach((val, i) => boxB.appendChild(makeBall(val, i === 0)));
         }
     },
 
@@ -79,6 +89,12 @@ const UI = {
         const pipe = document.getElementById('pipeline');
         if (!pipe) return;
         pipe.innerHTML = '';
+
+        if (!pipeline || pipeline.length === 0) {
+            const userMoves = document.getElementById('user-moves-count');
+            if (userMoves) userMoves.innerText = 0;
+            return;
+        }
 
         if (pipeline.length > 25) {
             const counts = {};
@@ -139,41 +155,48 @@ const UI = {
         const terminal = document.getElementById('terminal-view');
         if (!terminal) return;
 
+        const lang = AppState.currentLang;
+        const dict = I18N[lang] || I18N['tr'];
+
         if (tab === 'c') {
             if (terminal.contentEditable !== "true") {
-                terminal.innerText = C_SOURCE_CODE;
+                terminal.innerText = `${dict.term_c_comment}\n\n${C_SOURCE_CODE}`;
             }
             terminal.scrollTop = 0;
         } else if (tab === 'binary') {
-            const sorted = [...initialStack].sort((x, y) => x - y);
-            const n = initialStack.length;
+            const stack = initialStack || [];
+            const sorted = [...stack].sort((x, y) => x - y);
+            const n = stack.length;
             let maxBits = Math.ceil(Math.log2(n || 1));
             if (maxBits < 2) maxBits = 2;
 
-            let binText = `N: ${n} | BITS: ${maxBits}\n\n`;
-            const slice = initialStack.slice(0, 35);
+            let binText = dict.term_bin_header.replace('{n}', n).replace('{bits}', maxBits);
+            const slice = stack.slice(0, 35);
             slice.forEach(val => {
                 const idx = sorted.indexOf(val);
                 binText += `${val.toString().padStart(6, ' ')} -> [${idx.toString().padStart(4, ' ')}] -> ${idx.toString(2).padStart(maxBits, '0')}\n`;
             });
-            if (n > 35) binText += `... ve ${n - 35} sayi daha\n`;
+            if (n > 35) {
+                binText += dict.term_bin_more.replace('{count}', n - 35);
+            }
             terminal.innerText = binText;
             terminal.scrollTop = 0;
         } else if (tab === 'report') {
             if (!AppState.lastTestReport || AppState.lastTestReport.length === 0) {
-                terminal.innerHTML = '<div style="color:var(--text-muted); padding:10px;">Henüz test çalıştırılmadı. "Kodu Patlat" butonuna basın.</div>';
+                terminal.innerHTML = `<div style="color:var(--text-muted); padding:10px;">${dict.term_report_empty}</div>`;
                 return;
             }
 
-            let html = `<div style="font-weight:bold; color:var(--accent-blue); margin-bottom:8px;">[42 ${AppState.checkerOS.toUpperCase()} CHECKER EVO TEST RAPORU]</div>`;
+            const header = dict.term_report_header.replace('{os}', AppState.checkerOS.toUpperCase());
+            let html = `<div style="font-weight:bold; color:var(--accent-blue); margin-bottom:8px;">${header}</div>`;
             html += `<table class="test-report-table">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Test İsmi</th>
-                        <th>Denenen Input (ARG)</th>
-                        <th>Durum</th>
-                        <th>Detay / Barem</th>
+                        <th>${dict.th_report_id}</th>
+                        <th>${dict.th_report_name}</th>
+                        <th>${dict.th_report_input}</th>
+                        <th>${dict.th_report_status}</th>
+                        <th>${dict.th_report_detail}</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -194,7 +217,7 @@ const UI = {
         }
     },
 
-    // Bireysel ve Kampüs Savaşları Liderlik Tablosu Render Motoru
+    // Liderlik Tablosu Render Motoru
     renderLeaderboard(data, tab = 'cadets') {
         const thead = document.getElementById('leaderboard-head');
         const tbody = document.getElementById('leaderboard-body');
@@ -215,8 +238,9 @@ const UI = {
                 </tr>
             `;
 
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#64748b; padding:15px;">Henüz kayıtlı skor bulunmuyor.</td></tr>';
+            if (!data || data.length === 0) {
+                const emptyMsg = lang === 'tr' ? 'Henüz kayıtlı skor bulunmuyor.' : 'No recorded scores yet.';
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b; padding:15px;">${emptyMsg}</td></tr>`;
                 return;
             }
 
@@ -232,7 +256,7 @@ const UI = {
 
                 row.innerHTML = `
                     <td style="font-weight:bold; color:${index < 3 ? 'var(--accent-yellow)' : 'var(--text-muted)'};">${rankIcon}</td>
-                    <td style="font-weight:${isMe ? '900' : 'normal'}; color:${isMe ? 'var(--accent-blue)' : '#fff'};">${item.name} ${isMe ? '(Sen)' : ''}</td>
+                    <td style="font-weight:${isMe ? '900' : 'normal'}; color:${isMe ? 'var(--accent-blue)' : '#fff'};">${item.name} ${isMe ? (lang === 'tr' ? '(Sen)' : '(You)') : ''}</td>
                     <td><span style="background:#23283c; padding:2px 6px; border-radius:4px; font-size:11px; color:#38bdf8;">${item.campus || '42 Istanbul'}</span></td>
                     <td style="font-weight:bold; color:var(--accent-green);">${item.score}</td>
                     <td style="color:var(--text-muted); font-size:11px;">${item.date}</td>
@@ -244,14 +268,13 @@ const UI = {
                 <tr>
                     <th>#</th>
                     <th>${dict.th_campus}</th>
-                    <th>Toplam Skor</th>
-                    <th>Aktif Cadet</th>
+                    <th>${lang === 'tr' ? 'Toplam Skor' : 'Total Score'}</th>
+                    <th>${lang === 'tr' ? 'Aktif Cadet' : 'Active Cadets'}</th>
                 </tr>
             `;
 
-            // Kampüs skorlarını agrege et
             const campusStats = {};
-            data.forEach(item => {
+            (data || []).forEach(item => {
                 const c = item.campus || 'Other';
                 if (!campusStats[c]) campusStats[c] = { score: 0, count: 0 };
                 campusStats[c].score += item.score;
@@ -265,7 +288,8 @@ const UI = {
             })).sort((a, b) => b.score - a.score);
 
             if (sortedCampuses.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:15px;">Henüz kampüs verisi bulunmuyor.</td></tr>';
+                const emptyMsg = lang === 'tr' ? 'Henüz kampüs verisi bulunmuyor.' : 'No campus data available.';
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#64748b; padding:15px;">${emptyMsg}</td></tr>`;
                 return;
             }
 
