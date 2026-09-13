@@ -9,10 +9,10 @@ const PORT = process.env.PORT || 3000;
 const FIREBASE_PROJECT_ID = "push-swap-trainer-42";
 let currentRepoDir = null;
 
-// Bellek Takibi: Aktif Oturumlar
+// Aktif Oturum Havuzu
 const activeSessions = new Map();
 
-// Periyodik Çöp Toplayıcı (Terk edilmiş oturumları temizler, RAM sızıntısını önler)
+// Bellek Temizleyici (Garbage Collector): 45 dakikayı aşan atıl oturumları RAM'den siler
 setInterval(() => {
     const now = Date.now();
     for (const [id, sess] of activeSessions.entries()) {
@@ -64,7 +64,7 @@ function hasMain(filePath) {
     }
 }
 
-// Backend Doğrulama Motoru
+// Simülasyon Motoru (Doğrulama)
 function applyOpBackend(op, a, b) {
     if (op === 'sa') { if (a.length > 1) [a[0], a[1]] = [a[1], a[0]]; }
     else if (op === 'sb') { if (b.length > 1) [b[0], b[1]] = [b[1], b[0]]; }
@@ -160,7 +160,14 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
         const rawBody = Buffer.concat(chunks);
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-        const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+
+        // URL Normalizasyonu: Hem /api/... hem /... isteklerini karşılar
+        let pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+        if (pathname.startsWith('/api/')) {
+            pathname = pathname.substring(4);
+        } else if (pathname === '/api') {
+            pathname = '/';
+        }
 
         let parsedBody = {};
         if (rawBody.length > 0) {
@@ -171,8 +178,8 @@ const server = http.createServer((req, res) => {
             return sendJson(res, 200, { status: "OK", server: "42 Push_swap Master Node" });
         }
 
-        // 1. REPO DERLEME
-        if (pathname === '/api/compile' && req.method === 'POST') {
+        // 1. REPO DERLEME (/compile veya /api/compile)
+        if (pathname === '/compile' && req.method === 'POST') {
             let { repoUrl } = parsedBody;
             if (!repoUrl) return sendJson(res, 400, { success: false, error: 'Repo linki boş olamaz!' });
             const cleanUrl = repoUrl.trim();
@@ -193,8 +200,8 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        // 2. ZIP DERLEME
-        if (pathname === '/api/upload-zip' && req.method === 'POST') {
+        // 2. ZIP DERLEME (/upload-zip veya /api/upload-zip)
+        if (pathname === '/upload-zip' && req.method === 'POST') {
             const { fileBase64 } = parsedBody;
             if (!fileBase64) return sendJson(res, 400, { success: false, error: 'ZIP verisi bulunamadı!' });
 
@@ -213,8 +220,8 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        // 3. BINARY ÇALIŞTIRMA
-        if (pathname === '/api/run' && req.method === 'POST') {
+        // 3. BINARY ÇALIŞTIRMA (/run veya /api/run)
+        if (pathname === '/run' && req.method === 'POST') {
             const { args } = parsedBody;
             if (!currentRepoDir || !fs.existsSync(path.join(currentRepoDir, 'push_swap'))) {
                 return sendJson(res, 400, { success: false, error: 'Aktif push_swap binary bulunamadı! Kod yükleyin.' });
@@ -245,8 +252,8 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        // 4. OTURUM BAŞLATMA
-        if (pathname === '/api/start-session' && req.method === 'POST') {
+        // 4. OTURUM BAŞLATMA (/start-session veya /api/start-session)
+        if (pathname === '/start-session' && req.method === 'POST') {
             const { name, campus } = parsedBody;
             if (!name || !/^[a-zA-Z0-9_-]{2,12}$/.test(name)) {
                 return sendJson(res, 400, { success: false, error: 'Geçersiz 42 nick formatı!' });
@@ -274,8 +281,8 @@ const server = http.createServer((req, res) => {
             return sendJson(res, 200, { success: true, sessionId, levels: generatedLevels });
         }
 
-        // 5. DOĞRULAMA VE GÜVENLİ FİREBASE YAZIMI
-        if (pathname === '/api/verify-and-submit' && req.method === 'POST') {
+        // 5. DOĞRULAMA VE GÜVENLİ FİREBASE YAZIMI (/verify-and-submit veya /api/verify-and-submit)
+        if (pathname === '/verify-and-submit' && req.method === 'POST') {
             const { sessionId, solutions } = parsedBody;
             if (!sessionId || !activeSessions.has(sessionId)) {
                 return sendJson(res, 403, { success: false, error: 'Geçersiz veya süresi dolmuş oturum!' });
@@ -285,7 +292,7 @@ const server = http.createServer((req, res) => {
             const elapsedSeconds = (Date.now() - session.startTime) / 1000;
             const solCount = Array.isArray(solutions) ? solutions.length : 0;
 
-            // Mantıklı Seviye Başı Süre Kontrolü (Hile Koruma)
+            // Dinamik süre kontrolü: Seviye başına 1.2 saniyeden az sürede bitirilmişse reddeder
             if (elapsedSeconds < Math.max(5, solCount * 1.2)) {
                 activeSessions.delete(sessionId);
                 return sendJson(res, 400, { success: false, error: 'Hile Algılandı: İmkansız tamamlama hızı!' });
@@ -313,7 +320,7 @@ const server = http.createServer((req, res) => {
 
             activeSessions.delete(sessionId);
 
-            // Firebase'e Sunucu Tarafından Doğrudan Yazım
+            // Sunucu Tarafından Firebase REST API'ye Kayıt
             try {
                 const documentId = `${session.name.toLowerCase()}_${session.campus.replace(/\s+/g, '').toLowerCase()}`;
                 const firebaseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/leaderboard/${documentId}`;
